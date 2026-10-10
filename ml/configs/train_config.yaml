@@ -1,0 +1,31 @@
+# FloraScan Model Training Configuration
+model:
+  backbone: "efficientnet_lite0"
+  num_classes: 20
+  pretrained: true
+  dropout_rate: 0.25
+  img_size: 224
+
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  random_seed: 42
+
+training:
+  batch_size: 32
+  num_epochs: 30
+  early_stopping_patience: 5
+  learning_rate_head: 0.001
+  learning_rate_backbone: 0.0001
+  weight_decay: 0.01
+  label_smoothing: 0.1
+  mixed_precision: true
+
+quantization:
+  calibration_samples: 200
+  target_format: "int8"
+  output_tflite: "artifacts/florascan_solanaceae_v1_int8.tflite"

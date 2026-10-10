@@ -1,0 +1,22 @@
+# Deep Learning Backbone & Models
+torch>=2.2.0
+torchvision>=0.17.0
+timm>=0.9.12
+
+# In-Memory Farm Field Augmentations
+albumentations>=1.4.0
+opencv-python-headless>=4.9.0
+
+# Edge Quantization & Export
+ai-edge-torch>=0.1.0
+tensorflow>=2.16.1
+
+# Data Ingestion & Evaluation Metrics
+numpy>=1.26.0
+pandas>=2.2.0
+scikit-learn>=1.4.0
+pillow>=10.2.0
+tqdm>=4.66.0
+pyyaml>=6.0.1
+matplotlib>=3.8.0
+seaborn>=0.13.0
