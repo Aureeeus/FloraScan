@@ -1,0 +1,324 @@
+{
+  "classes": [
+    {
+      "index": 0,
+      "id": "eggplant_healthy",
+      "crop": "Eggplant",
+      "folder": "eggplant/Healthy",
+      "displayName": "Healthy Canopy Vigor",
+      "scientificPathogen": "None (Optimal Physiology)",
+      "severity": "healthy",
+      "symptoms": [
+        "Uniform dark green foliage without chlorosis",
+        "Turgid leaf structure free of foliar lesions or defoliation"
+      ],
+      "organicTreatment": "Maintain regular foliar compost tea and balanced organic nutrition.",
+      "chemicalTreatment": "None required.",
+      "preventativeAction": "Routine crop scouting and drip irrigation to maintain ideal root-zone moisture."
+    },
+    {
+      "index": 1,
+      "id": "eggplant_insect_pest",
+      "crop": "Eggplant",
+      "folder": "eggplant/Insect_Pest",
+      "displayName": "Insect Pest Infestation",
+      "scientificPathogen": "Epitrix spp. / Leucinodes orbonalis",
+      "severity": "caution",
+      "symptoms": [
+        "Shot-hole perforations across foliage from flea beetles",
+        "Chewed leaf margins and wilting terminal shoots from shoot borers"
+      ],
+      "organicTreatment": "Apply neem oil (0.5%) spray or pyrethrin-based botanical extract in early morning.",
+      "chemicalTreatment": "Rotate targeted insecticides (e.g., chlorantraniliprole or spinosad per label instructions).",
+      "preventativeAction": "Deploy yellow sticky traps and pheromone traps across the field perimeter."
+    },
+    {
+      "index": 2,
+      "id": "eggplant_leaf_spot",
+      "crop": "Eggplant",
+      "folder": "eggplant/Leaf_Spot",
+      "displayName": "Cercospora Leaf Spot",
+      "scientificPathogen": "Cercospora melongenae",
+      "severity": "caution",
+      "symptoms": [
+        "Circular to irregular chlorotic spots turning gray-brown",
+        "Concentric rings with darker margins on mature lower leaves"
+      ],
+      "organicTreatment": "Copper hydroxide or copper octanoate protective spray; remove lower infected foliage.",
+      "chemicalTreatment": "Apply preventative mancozeb or difenoconazole at first lesion onset.",
+      "preventativeAction": "Promote wide row spacing for canopy airflow; avoid overhead sprinkler irrigation."
+    },
+    {
+      "index": 3,
+      "id": "eggplant_mosaic_virus",
+      "crop": "Eggplant",
+      "folder": "eggplant/Mosaic_Virus",
+      "displayName": "Mosaic Virus",
+      "scientificPathogen": "Tobacco Mosaic Virus (TMV) / Cucumber Mosaic Virus (CMV)",
+      "severity": "severe",
+      "symptoms": [
+        "Interveinal mosaic mottling with alternating light and dark green patches",
+        "Leaf puckering, distortion, and stunted canopy growth"
+      ],
+      "organicTreatment": "No curative treatment exists; rogue out and destroy severely infected plants immediately.",
+      "chemicalTreatment": "Control vector aphid and thrip populations using systemic insecticide.",
+      "preventativeAction": "Disinfect tools with 10% trisodium phosphate; sanitize hands between plants."
+    },
+    {
+      "index": 4,
+      "id": "eggplant_small_leaf",
+      "crop": "Eggplant",
+      "folder": "eggplant/Small_Leaf",
+      "displayName": "Little Leaf Disease",
+      "scientificPathogen": "Phytoplasma (Transmitted by Hishimonus phycitis)",
+      "severity": "severe",
+      "symptoms": [
+        "Severe leaf miniaturization and shortened internodes",
+        "Excessive bushy shoots with phyllody (floral parts transformed into leaves)"
+      ],
+      "organicTreatment": "Uproot and burn diseased plants; spray botanical neem repellent against leafhoppers.",
+      "chemicalTreatment": "Apply imidacloprid or dimethoate to suppress vector leafhopper populations.",
+      "preventativeAction": "Eradicate alternate weed hosts around the plot perimeter before planting."
+    },
+    {
+      "index": 5,
+      "id": "eggplant_white_mold",
+      "crop": "Eggplant",
+      "folder": "eggplant/White_Mold",
+      "displayName": "White Mold / Stem Rot",
+      "scientificPathogen": "Sclerotinia sclerotiorum",
+      "severity": "severe",
+      "symptoms": [
+        "Cottony white mycelial fungal growth on leaves and stem base",
+        "Black irregular sclerotia bodies embedded within collapsing tissue"
+      ],
+      "organicTreatment": "Soil drench with antagonistic Trichoderma harzianum; prune infected branches.",
+      "chemicalTreatment": "Apply preventative boscalid, cyprodinil, or iprodione during high humidity.",
+      "preventativeAction": "Practice 3-year non-host crop rotation; improve soil drainage and reduce plant density."
+    },
+    {
+      "index": 6,
+      "id": "eggplant_wilt",
+      "crop": "Eggplant",
+      "folder": "eggplant/Wilt",
+      "displayName": "Bacterial Wilt",
+      "scientificPathogen": "Ralstonia solanacearum",
+      "severity": "severe",
+      "symptoms": [
+        "Rapid daytime wilting without prominent initial leaf yellowing",
+        "Vascular browning and milky bacterial ooze when stem is placed in clear water"
+      ],
+      "organicTreatment": "Incorporate bio-fumigant mustard cover crops; rogue out wilted specimens immediately.",
+      "chemicalTreatment": "No effective chemical curative; copper bactericides provide limited soil suppression.",
+      "preventativeAction": "Graft commercial varieties onto resistant rootstocks; maintain raised beds."
+    },
+    {
+      "index": 7,
+      "id": "tomato_early_blight",
+      "crop": "Tomato",
+      "folder": "tomato/Tomato_Early_blight_leaf",
+      "displayName": "Early Blight",
+      "scientificPathogen": "Alternaria solani",
+      "severity": "severe",
+      "symptoms": [
+        "Dark brown circular lesions with concentric target rings",
+        "Chlorotic yellow halo surrounding older foliage lesions"
+      ],
+      "organicTreatment": "Apply copper octanoate spray; remove and destroy lower infected leaves.",
+      "chemicalTreatment": "Rotate preventative chlorothalonil or azoxystrobin fungicides per label intervals.",
+      "preventativeAction": "Utilize drip irrigation to avoid leaf wetness; mulch soil to halt spore splash."
+    },
+    {
+      "index": 8,
+      "id": "tomato_late_blight",
+      "crop": "Tomato",
+      "folder": "tomato/Tomato_leaf_late_blight",
+      "displayName": "Late Blight",
+      "scientificPathogen": "Phytophthora infestans",
+      "severity": "severe",
+      "symptoms": [
+        "Large irregular water-soaked dark olive to purplish lesions",
+        "White downy mold sporulation visible on leaf undersides in humid mornings"
+      ],
+      "organicTreatment": "Immediate foliar copper sulfate application; destroy heavily infected crops.",
+      "chemicalTreatment": "Apply systemic cymoxanil, mandipropamid, or metalaxyl upon first regional alert.",
+      "preventativeAction": "Scout aggressively during cool, foggy weather; destroy volunteer tomato cull piles."
+    },
+    {
+      "index": 9,
+      "id": "tomato_septoria_leaf_spot",
+      "crop": "Tomato",
+      "folder": "tomato/Tomato_Septoria_leaf_spot",
+      "displayName": "Septoria Leaf Spot",
+      "scientificPathogen": "Septoria lycopersici",
+      "severity": "caution",
+      "symptoms": [
+        "Numerous small circular spots with dark brown margins and gray centers",
+        "Tiny black pycnidia specks visible within lesion centers"
+      ],
+      "organicTreatment": "Bio-fungicidal Bacillus subtilis spray; strip bottom 12 inches of foliage.",
+      "chemicalTreatment": "Apply chlorothalonil or mancozeb at 7 to 10 day intervals.",
+      "preventativeAction": "Avoid overhead watering; disinfect stakes and tomato cages between seasons."
+    },
+    {
+      "index": 10,
+      "id": "tomato_yellow_leaf_curl",
+      "crop": "Tomato",
+      "folder": "tomato/Tomato_leaf_yellow_curl_virus",
+      "displayName": "Yellow Leaf Curl Virus",
+      "scientificPathogen": "Tomato Yellow Leaf Curl Virus (TYLCV)",
+      "severity": "severe",
+      "symptoms": [
+        "Severe upward leaf curling and cupping with interveinal yellowing",
+        "Severe plant stunting and flower abortion leading to minimal fruit set"
+      ],
+      "organicTreatment": "No viral cure; rogue infected plants; spray insecticidal soap or neem against whiteflies.",
+      "chemicalTreatment": "Systemic neonicotinoids or cyantraniliprole targeting Bemisia tabaci vector.",
+      "preventativeAction": "Use insect-proof netting (50-mesh) on nurseries; use TYLCV-resistant hybrids."
+    },
+    {
+      "index": 11,
+      "id": "tomato_mold_leaf",
+      "crop": "Tomato",
+      "folder": "tomato/Tomato_mold_leaf",
+      "displayName": "Leaf Mold",
+      "scientificPathogen": "Passalora fulva (Cladosporium fulvum)",
+      "severity": "caution",
+      "symptoms": [
+        "Pale green to yellow spots on upper leaf surface",
+        "Olive-green to brown velvety fungal growth on matching lower leaf surface"
+      ],
+      "organicTreatment": "Foliar sulfur dust or potassium bicarbonate spray; prune inner canopy for airflow.",
+      "chemicalTreatment": "Apply preventative thiophanate-methyl or azoxystrobin fungicides.",
+      "preventativeAction": "Maintain relative humidity below 85% in greenhouse or polytunnel enclosures."
+    },
+    {
+      "index": 12,
+      "id": "tomato_healthy",
+      "crop": "Tomato",
+      "folder": "tomato/Tomato_Healthy_leaf",
+      "displayName": "Healthy Foliage",
+      "scientificPathogen": "None (Optimal Physiology)",
+      "severity": "healthy",
+      "symptoms": [
+        "Vibrant green leaves with firm turgor and normal serration",
+        "No necrosis, chlorosis, or pathogen sporulation"
+      ],
+      "organicTreatment": "Standard balanced organic fish hydrolysate or kelp foliar feed.",
+      "chemicalTreatment": "None required.",
+      "preventativeAction": "Continue regular scouting and balanced nitrogen-potassium crop nutrition."
+    },
+    {
+      "index": 13,
+      "id": "chili_anthracnose",
+      "crop": "Red Chili",
+      "folder": "chili/Anthracnose",
+      "displayName": "Anthracnose Fruit & Foliage Spot",
+      "scientificPathogen": "Colletotrichum capsici",
+      "severity": "severe",
+      "symptoms": [
+        "Sunken circular necrotic lesions with concentric acervuli rings",
+        "Black fungal microsclerotia and premature leaf senescence"
+      ],
+      "organicTreatment": "Neem oil foliar application; wettable sulfur in early morning hours.",
+      "chemicalTreatment": "Mancozeb or pyraclostrobin application during early canopy and fruit development.",
+      "preventativeAction": "Use certified pathogen-free seeds; practice 3-year Solanaceae crop rotation."
+    },
+    {
+      "index": 14,
+      "id": "chili_bacterial_spot",
+      "crop": "Red Chili",
+      "folder": "chili/Bacterial Spot",
+      "displayName": "Bacterial Spot",
+      "scientificPathogen": "Xanthomonas campestris pv. vesicatoria",
+      "severity": "caution",
+      "symptoms": [
+        "Small dark water-soaked spots enlarging into circular brown lesions",
+        "Lesions blistered or scab-like with yellow chlorotic borders"
+      ],
+      "organicTreatment": "Copper bactericide (copper hydroxide) combined with biological Bacillus subtilis.",
+      "chemicalTreatment": "Streptomycin sulfate tank-mix where locally registered for agricultural use.",
+      "preventativeAction": "Sanitize seed with hot-water treatment (50°C for 25 min); avoid handling wet plants."
+    },
+    {
+      "index": 15,
+      "id": "chili_cercospora_leaf_spot",
+      "crop": "Red Chili",
+      "folder": "chili/Cercospora Leaf Spot",
+      "displayName": "Frogeye Leaf Spot",
+      "scientificPathogen": "Cercospora capsici",
+      "severity": "caution",
+      "symptoms": [
+        "Circular lesions with light gray centers and prominent dark brown borders",
+        "Premature defoliation starting from the lower canopy during humid periods"
+      ],
+      "organicTreatment": "Apply copper octanoate; remove fallen infected debris to lower inoculum.",
+      "chemicalTreatment": "Apply chlorothalonil or carbendazim preventative sprays at 10-day intervals.",
+      "preventativeAction": "Maintain adequate spacing; mulch beds with rice straw or plastic film."
+    },
+    {
+      "index": 16,
+      "id": "chili_curl_virus",
+      "crop": "Red Chili",
+      "folder": "chili/Curl Virus",
+      "displayName": "Chili Leaf Curl Virus",
+      "scientificPathogen": "Chili Leaf Curl Virus (ChiLCV)",
+      "severity": "severe",
+      "symptoms": [
+        "Upward curling, puckering, and crinkling of leaf blades",
+        "Severe vein thickening, bushiness, and stunted terminal growth"
+      ],
+      "organicTreatment": "Rogue out symptomatic plants; spray mineral oil or neem to repel whiteflies and thrips.",
+      "chemicalTreatment": "Imidacloprid or diafenthiuron applied to suppress vector whitefly populations.",
+      "preventativeAction": "Install silver reflective mulches; cultivate maize or sorghum border trap crops."
+    },
+    {
+      "index": 17,
+      "id": "chili_nutrition_deficiency",
+      "crop": "Red Chili",
+      "folder": "chili/Nutrition Deficiency",
+      "displayName": "Nutrient Deficiency Chlorosis",
+      "scientificPathogen": "Abiotic (Nitrogen / Iron / Magnesium Deficit)",
+      "severity": "caution",
+      "symptoms": [
+        "Interveinal chlorosis on young foliage (Fe) or generalized pale yellowing on older leaves (N)",
+        "Stunted vegetative expansion without distinct fungal or bacterial lesion borders"
+      ],
+      "organicTreatment": "Apply chelated iron or balanced foliar seaweed and fish amino acid extract.",
+      "chemicalTreatment": "Foliar application of 19-19-19 water-soluble NPK fertilizer with micronutrients.",
+      "preventativeAction": "Conduct routine soil pH testing; maintain soil pH between 6.0 and 6.8."
+    },
+    {
+      "index": 18,
+      "id": "chili_white_spot",
+      "crop": "Red Chili",
+      "folder": "chili/White spot",
+      "displayName": "White Spot Disease",
+      "scientificPathogen": "Pseudocercospora capsicicola / Fungal Complex",
+      "severity": "caution",
+      "symptoms": [
+        "Small bleached chalk-white or off-white spots across leaf surface",
+        "Thinning leaf tissue susceptible to shot-hole tearing under wind"
+      ],
+      "organicTreatment": "Protective copper fungicide spray; improve plant nutrition and vigor.",
+      "chemicalTreatment": "Difenoconazole or tebuconazole spray at early disease detection.",
+      "preventativeAction": "Avoid overhead water splash; ensure good air movement through pruning."
+    },
+    {
+      "index": 19,
+      "id": "chili_healthy",
+      "crop": "Red Chili",
+      "folder": "chili/Healthy Leaf",
+      "displayName": "Healthy Foliage",
+      "scientificPathogen": "None (Optimal Physiology)",
+      "severity": "healthy",
+      "symptoms": [
+        "Glossy uniform deep green leaf color",
+        "Firm leaf lamina without curling, lesions, or abiotic chlorosis"
+      ],
+      "organicTreatment": "Routine foliar bio-stimulant or compost tea nourishment.",
+      "chemicalTreatment": "None required.",
+      "preventativeAction": "Maintain balanced moisture schedule and periodic canopy scouting."
+    }
+  ]
+}
