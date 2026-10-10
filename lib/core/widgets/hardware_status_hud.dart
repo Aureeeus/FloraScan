@@ -20,6 +20,9 @@ class HardwareStatusHud extends ConsumerWidget {
     final telemetryAsync = ref.watch(liveTelemetryProvider);
     final agriColors = context.agriTheme;
 
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isCompact = screenWidth < 380;
+
     return telemetryAsync.maybeWhen(
       data: (telemetry) {
         return Container(
@@ -67,22 +70,24 @@ class HardwareStatusHud extends ConsumerWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                width: 1,
-                height: 10,
-                color: AppColors.outlineVariant,
-              ),
-              const SizedBox(width: 8),
-              // Edge AI indicator
-              Text(
-                'TFLite Local (${telemetry.localInferenceLatencyMs}ms)',
-                style: AppTypography.telemetrySmall.copyWith(
-                  color: AppColors.secondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
+              if (!isCompact) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 1,
+                  height: 10,
+                  color: AppColors.outlineVariant,
                 ),
-              ),
+                const SizedBox(width: 8),
+                // Edge AI indicator
+                Text(
+                  'TFLite Local (${telemetry.localInferenceLatencyMs}ms)',
+                  style: AppTypography.telemetrySmall.copyWith(
+                    color: AppColors.secondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           ),
         );
