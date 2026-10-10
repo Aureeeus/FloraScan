@@ -117,18 +117,34 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   // Viewfinder Frame
                   const ScanViewfinderReticle(),
                   const Spacer(),
-                  // Instructions text
+                  // Instructions text and Quick Test button
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      'Align single leaf within frame under daylight. Hold steady for edge inference.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: Colors.white70,
-                      ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Align single leaf within frame under daylight. Hold steady for edge inference.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: isAnalyzing ? null : _triggerScan,
+                          icon: const Icon(Icons.biotech, color: AppColors.secondaryFixed, size: 16),
+                          label: Text(
+                            'Inspect Roma Tomato Sample (Verdict & Diagnosis)',
+                            style: AppTypography.labelUi.copyWith(
+                              color: AppColors.secondaryFixed,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   // Bottom controls bar (Thumb zone)
                   Container(
                     padding: const EdgeInsets.fromLTRB(32, 16, 32, 28),
