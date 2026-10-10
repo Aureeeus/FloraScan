@@ -50,16 +50,16 @@ class FloraScanModel(nn.Module):
         weight_decay: float = 1e-2,
     ) -> list[dict[str, Any]]:
         """Split parameters into backbone and classification head for differential learning rates."""
+        classifier = self.backbone.get_classifier()
+        classifier_params = set(classifier.parameters())
+
         head_params = []
         backbone_params = []
 
-        # Find head classifier layer name
-        classifier_name = self.backbone.get_classifier_name()
-
-        for name, param in self.backbone.named_parameters():
+        for param in self.backbone.parameters():
             if not param.requires_grad:
                 continue
-            if classifier_name and name.startswith(classifier_name):
+            if param in classifier_params:
                 head_params.append(param)
             else:
                 backbone_params.append(param)

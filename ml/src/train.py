@@ -7,10 +7,14 @@ Saves checkpoints and history to ml/artifacts/.
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 import time
 from typing import Any
+
+# Suppress HuggingFace Hub Windows symlink warning
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 # Ensure src directory is in sys.path
 sys.path.append(str(Path(__file__).resolve().parent))
