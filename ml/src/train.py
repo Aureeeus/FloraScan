@@ -105,7 +105,11 @@ def evaluate(
     return epoch_loss, epoch_acc, epoch_f1
 
 
-def run_training(config_path: Path | str, override_epochs: int | None = None) -> None:
+def run_training(
+    config_path: Path | str,
+    override_epochs: int | None = None,
+    warm_start: str | None = None,
+) -> None:
     ml_dir = Path(__file__).resolve().parent.parent
     artifacts_dir = ml_dir / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -131,6 +135,11 @@ def run_training(config_path: Path | str, override_epochs: int | None = None) ->
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # Defensive hardware control: Pin PyTorch to physical cores (leaves logical threads for OS)
+    if not torch.cuda.is_available():
+        torch.set_num_threads(6)
+        print(f"[*] Thread Management  : Pinned to 6 physical cores (Thermal & OS protected)")
+
     print("=" * 65)
     print(" FloraScan: EfficientNet-Lite0 Solanaceae Training Pipeline")
     print("=" * 65)
@@ -150,8 +159,20 @@ def run_training(config_path: Path | str, override_epochs: int | None = None) ->
     )
     print(f"[*] DataLoaders Ready  : {len(train_loader.dataset)} Train | {len(val_loader.dataset)} Validation")
 
-    # 2. Build Model
+    # 2. Build Model & Optional Warm-Start Injection
     model = build_model(config).to(device)
+    if warm_start:
+        w_path = Path(warm_start)
+        if not w_path.is_absolute():
+            w_path = ml_dir / w_path
+        if w_path.exists():
+            print(f"[*] Warm-Starting from : {w_path.name}")
+            ckpt = torch.load(w_path, map_location=device)
+            state_dict = ckpt.get("model_state_dict", ckpt)
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            print(f"[*] Pretrained Weights : Injected (Missing={len(missing)} | Unexpected={len(unexpected)})")
+        else:
+            print(f"[!] Warning: Checkpoint {w_path} not found. Training from scratch.")
 
     # 3. Optimizer & Loss
     param_groups = model.get_parameter_groups(
@@ -161,7 +182,19 @@ def run_training(config_path: Path | str, override_epochs: int | None = None) ->
     )
     optimizer = torch.optim.AdamW(param_groups)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-    criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    # Dynamic smoothed inverse-frequency class weighting to protect minority classes (SSOT)
+    train_manifest = ml_dir / "data" / "splits" / "train.csv"
+    if train_manifest.exists():
+        import pandas as pd
+        df_train = pd.read_csv(train_manifest)
+        class_counts = df_train["class_index"].value_counts().sort_index().values
+        weights = 1.0 / np.sqrt(class_counts + 1)
+        weights = weights / weights.sum() * len(class_counts)
+        class_weights = torch.tensor(weights, dtype=torch.float32).to(device)
+        criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=label_smoothing)
+        print(f"[*] Loss Criterion     : Class-Weighted CrossEntropyLoss (Smoothed Square-Root Weights)")
+    else:
+        criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
 
     history: list[dict[str, Any]] = []
     best_val_f1 = -1.0
@@ -244,9 +277,19 @@ def main() -> None:
         help="Path to training config YAML",
     )
     parser.add_argument("--epochs", type=int, default=None, help="Override number of epochs")
+    parser.add_argument(
+        "--warm-start",
+        type=str,
+        default=None,
+        help="Path to checkpoint to warm-start training from (e.g. artifacts/stage1_best_checkpoint.pth)",
+    )
     args = parser.parse_args()
 
-    run_training(config_path=args.config, override_epochs=args.epochs)
+    run_training(
+        config_path=args.config,
+        override_epochs=args.epochs,
+        warm_start=args.warm_start,
+    )
 
 
 if __name__ == "__main__":
