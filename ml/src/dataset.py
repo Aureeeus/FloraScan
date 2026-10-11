@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader, Dataset
 def get_train_transforms(img_size: int = 224) -> A.Compose:
     """Return in-memory augmentation pipeline simulating farm field conditions."""
     return A.Compose([
-        A.RandomResizedCrop(size=(img_size, img_size), scale=(0.8, 1.0)),
+        A.RandomResizedCrop(size=(img_size, img_size), scale=(0.4, 1.0)),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.2),
         A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.4),

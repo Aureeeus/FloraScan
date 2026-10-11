@@ -5,9 +5,13 @@ and Eggplant into a clean ImageFolder layout under `ml/data/raw/`.
 Filters out macOS metadata (__MACOSX), .DS_Store, and ignores pre-augmented duplicates.
 """
 
+import hashlib
+import io
 from pathlib import Path
 import shutil
 import zipfile
+
+from PIL import Image
 
 
 def find_file(root_dir: Path, filename: str) -> Path | None:
@@ -84,6 +88,95 @@ def organize_tomato(data_dir: Path, target_dir: Path) -> dict[str, int]:
                     with zf.open(member) as src, open(dest_file, "wb") as dst:
                         shutil.copyfileobj(src, dst)
                     counts[class_name] = counts.get(class_name, 0) + 1
+
+    return counts
+
+
+def organize_tomato_supplement(data_dir: Path, target_dir: Path) -> dict[str, int]:
+    """Extract and merge supplementary processed Tomato dataset (PlantVillage / Mendeley).
+
+    Enforces Single Source of Truth (SSOT) class mapping, SHA-256 deduplication,
+    image integrity verification, and ignores unsupported classes (e.g. Bacterial spot)
+    to protect the 20-class production taxonomy.
+    """
+    tom_target = target_dir / "tomato"
+    tom_target.mkdir(parents=True, exist_ok=True)
+    counts: dict[str, int] = {}
+
+    # Canonical class mapping to SSOT registry folder names
+    class_mapping = {
+        "Tomato___Early_blight": "Tomato_Early_blight_leaf",
+        "Tomato___Late_blight": "Tomato_leaf_late_blight",
+        "Tomato___healthy": "Tomato_Healthy_leaf",
+        "Tomato___Leaf_Mold": "Tomato_mold_leaf",
+        "Tomato___Septoria_leaf_spot": "Tomato_Septoria_leaf_spot",
+    }
+
+    # Locate zip file: check for Dataset-*.zip or zip containing Tomato___Early_blight
+    supp_zip: Path | None = None
+    for p in data_dir.rglob("*.zip"):
+        if "Dataset" in p.name or "Tomato" in p.name:
+            try:
+                with zipfile.ZipFile(p, "r") as zf:
+                    if any("Tomato___Early_blight" in m for m in zf.namelist()):
+                        supp_zip = p
+                        break
+            except Exception:
+                continue
+
+    if not supp_zip:
+        print("[!] Supplementary Tomato zip not found in data directory.")
+        return counts
+
+    print(f"[*] Ingesting supplementary Tomato dataset from {supp_zip.name}...")
+
+    # Pre-index existing image hashes to guarantee zero duplicates (SSOT / Defensive)
+    existing_hashes: set[str] = set()
+    for img_file in tom_target.rglob("*"):
+        if img_file.is_file() and img_file.suffix.lower() in [".jpg", ".jpeg", ".png"]:
+            try:
+                with open(img_file, "rb") as f:
+                    existing_hashes.add(hashlib.md5(f.read()).hexdigest())
+            except Exception:
+                pass
+
+    with zipfile.ZipFile(supp_zip, "r") as zf:
+        for member in zf.namelist():
+            if member.endswith("/") or "__MACOSX" in member or member.startswith("."):
+                continue
+            parts = [p for p in member.split("/") if p]
+            if len(parts) >= 3:
+                split_tag = parts[-3]
+                source_class = parts[-2]
+                img_name = parts[-1]
+
+                if source_class not in class_mapping:
+                    continue
+                if not any(img_name.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png"]):
+                    continue
+
+                target_folder_name = class_mapping[source_class]
+                class_dest = tom_target / target_folder_name
+                class_dest.mkdir(parents=True, exist_ok=True)
+
+                img_bytes = zf.read(member)
+                img_hash = hashlib.md5(img_bytes).hexdigest()
+                if img_hash in existing_hashes:
+                    continue
+
+                # Defensive check: verify image validity
+                try:
+                    with Image.open(io.BytesIO(img_bytes)) as pil_img:
+                        pil_img.verify()
+                except Exception:
+                    continue
+
+                dest_file = class_dest / f"pv_{split_tag}_{img_name}"
+                if not dest_file.exists():
+                    with open(dest_file, "wb") as dst:
+                        dst.write(img_bytes)
+                    existing_hashes.add(img_hash)
+                    counts[target_folder_name] = counts.get(target_folder_name, 0) + 1
 
     return counts
 
@@ -165,6 +258,7 @@ def main() -> None:
 
     eggplant_counts = organize_eggplant(data_dir, raw_dir)
     tomato_counts = organize_tomato(data_dir, raw_dir)
+    tomato_supp_counts = organize_tomato_supplement(data_dir, raw_dir)
     chili_counts = organize_chili(data_dir, raw_dir)
 
     print("\n" + "=" * 60)
@@ -178,8 +272,13 @@ def main() -> None:
         print(f"  {cls:<30}: {count:>5} images")
         total_images += count
 
-    print("\n--- TOMATO ---")
+    print("\n--- TOMATO (PAKISTAN FIELD BASE) ---")
     for cls, count in sorted(tomato_counts.items()):
+        print(f"  {cls:<30}: {count:>5} images")
+        total_images += count
+
+    print("\n--- TOMATO (SUPPLEMENTARY PLANTVILLAGE / MENDELEY) ---")
+    for cls, count in sorted(tomato_supp_counts.items()):
         print(f"  {cls:<30}: {count:>5} images")
         total_images += count
 
