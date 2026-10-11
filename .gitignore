@@ -1,27 +1,59 @@
-# Miscellaneous
+# ==============================================================================
+# FLORA SCAN - GLOBAL REPOSITORY GITIGNORE
+# ==============================================================================
+
+# OS & Filesystem Metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
+desktop.ini
+
+# Miscellaneous & Editor Backups
 *.class
 *.log
-*.pyc
 *.swp
-.DS_Store
+.history
 .atom/
 .build/
 .buildlog/
-.history
 .svn/
 .swiftpm/
 migrate_working_dir/
+*.sublime-project
+*.sublime-workspace
 
-# IntelliJ / IDE
+# IntelliJ / JetBrains / VS Code IDEs
 *.iml
 *.ipr
 *.iws
 .idea/
 .vscode/
 
-# Flutter / Dart Mobile
+# ==============================================================================
+# SECRETS & CREDENTIALS PROTECTION (Defense in Depth)
+# ==============================================================================
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+key.properties
+*.keystore
+*.jks
+
+# ==============================================================================
+# FLUTTER / DART (MOBILE CLIENT)
+# ==============================================================================
 **/.dart_tool/
+**/.flutter-plugins
 **/.flutter-plugins-dependencies
+**/.packages
 **/.pub-cache/
 **/.pub/
 **/build/
@@ -34,18 +66,54 @@ mobile/android/app/release/
 app.*.symbols
 app.*.map.json
 
-# Machine Learning Pipeline & Data Protection (Heavy Artifacts)
-ml/data/
-ml/checkpoints/
-ml/runs/
-ml/logs/
+# Mobile Application Packages
+*.apk
+*.aab
+*.ipa
+
+# ==============================================================================
+# PYTHON & MACHINE LEARNING PIPELINE
+# ==============================================================================
+# Virtual Environments
+.venv/
+venv/
+env/
 ml/.venv/
 ml/venv/
 ml/env/
-ml/**/__pycache__/
-ml/**/.ipynb_checkpoints/
+
+# Python Bytecode, Caches & Testing
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+**/.ipynb_checkpoints/
+
+# Machine Learning Data & Training Artifacts (SSOT)
+ml/data/
+ml/artifacts/
+ml/checkpoints/
+ml/runs/
+ml/logs/
+
+# Heavy Model Weights & Compressed Archives
 *.zip
 *.tar.gz
+*.tar
 *.pth
 *.pt
 *.ckpt
+*.onnx
+*.safetensors
+*.h5
+*.pkl
+*.pickle
+
+# TFLite Model Rules (Ignore scratch/training, whitelist mobile production assets)
+*.tflite
+!mobile/assets/models/*.tflite
+!mobile/assets/models/**/*.tflite
