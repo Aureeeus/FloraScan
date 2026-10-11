@@ -30,9 +30,17 @@ def evaluate_test_set(checkpoint_path: Path | str, batch_size: int = 32) -> dict
     registry_path = ml_dir / "configs" / "pathology_registry.json"
     artifacts_dir = ml_dir / "artifacts"
     checkpoint_file = Path(checkpoint_path)
-
     if not checkpoint_file.exists():
-        raise FileNotFoundError(f"Checkpoint not found at: {checkpoint_file}")
+        candidates = [
+            ml_dir / checkpoint_path,
+            artifacts_dir / checkpoint_file.name,
+        ]
+        for cand in candidates:
+            if cand.exists():
+                checkpoint_file = cand
+                break
+        else:
+            raise FileNotFoundError(f"Checkpoint not found at: {checkpoint_file}")
 
     with open(registry_path, "r", encoding="utf-8") as f:
         registry = json.load(f)
