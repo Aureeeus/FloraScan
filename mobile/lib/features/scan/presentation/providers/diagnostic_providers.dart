@@ -1,12 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/repositories/mock_diagnostic_repository.dart';
+import '../../../../core/database/app_database.dart';
+import '../../data/repositories/sqlite_diagnostic_repository.dart';
 import '../../domain/entities/diagnostic_scan_model.dart';
+import '../../domain/entities/telemetry_reading.dart';
 import '../../domain/repositories/diagnostic_repository.dart';
 
 /// Dependency injection provider for [DiagnosticRepository].
+///
+/// Injects SQLite-backed repository for optical pathology inference and offline scan logging.
 final diagnosticRepositoryProvider = Provider<DiagnosticRepository>((ref) {
-  return MockDiagnosticRepository();
+  final appDb = ref.watch(appDatabaseProvider);
+  return SqliteDiagnosticRepository(appDb);
 });
 
 /// Reactive provider fetching recent diagnostic scans.
@@ -26,6 +31,7 @@ class ActiveDiagnosticScanNotifier extends AsyncNotifier<DiagnosticScanResult?> 
   Future<DiagnosticScanResult?> executeScan({
     required String imagePath,
     required String cropType,
+    TelemetryReading? telemetry,
   }) async {
     state = const AsyncValue.loading();
     DiagnosticScanResult? result;
@@ -35,6 +41,7 @@ class ActiveDiagnosticScanNotifier extends AsyncNotifier<DiagnosticScanResult?> 
       result = await repository.analyzeLeaf(
         imagePath: imagePath,
         cropType: cropType,
+        telemetry: telemetry,
       );
       // Invalidate scan history so UI lists update automatically
       ref.invalidate(recentScansProvider);
