@@ -1,0 +1,13 @@
+{
+  "optimal_temperature": 0.5235256355531587,
+  "baseline_val_ece": 0.14633148574172838,
+  "calibrated_val_ece": 0.006541054355542867,
+  "baseline_test_ece": 0.15729981651925384,
+  "calibrated_test_ece": 0.008177133554616143,
+  "recommended_guardrails": {
+    "high_confidence_threshold": 0.75,
+    "ambiguity_zone_min": 0.45,
+    "rejection_threshold": 0.45,
+    "differential_margin_threshold": 0.2
+  }
+}
