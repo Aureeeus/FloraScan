@@ -65,6 +65,7 @@ mobile/android/app/profile/
 mobile/android/app/release/
 app.*.symbols
 app.*.map.json
+**/devtools_options.yaml
 
 # Mobile Application Packages
 *.apk
@@ -113,7 +114,10 @@ ml/logs/
 *.pkl
 *.pickle
 
-# TFLite Model Rules (Ignore scratch/training, whitelist mobile production assets)
+# ONNX & TFLite Model Rules (Ignore scratch/training, whitelist mobile production assets)
 *.tflite
+*.onnx
 !mobile/assets/models/*.tflite
 !mobile/assets/models/**/*.tflite
+!mobile/assets/models/*.onnx
+!mobile/assets/models/**/*.onnx
