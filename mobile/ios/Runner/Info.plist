@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>FloraScan requires Bluetooth access to connect to your FloraWand sensor probe.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>FloraScan requires Bluetooth access to connect to your FloraWand sensor probe.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -66,5 +70,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>FloraScan requires camera access to capture leaf images for plant disease diagnosis.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FloraScan requires photo library access to select plant photos for disease diagnosis.</string>
 </dict>
 </plist>

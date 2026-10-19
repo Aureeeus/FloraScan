@@ -23,4 +23,6 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
 }
 
+rootProject.name = "florascan_1_android"
+
 include(":app")
