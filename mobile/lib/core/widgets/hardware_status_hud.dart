@@ -11,7 +11,7 @@ import '../theme/app_typography.dart';
 /// Displays:
 /// - Real-time BLE IoT Wand connectivity state.
 /// - Wand battery percentage.
-/// - Offline edge TFLite inference badge.
+/// - Offline edge ONNX inference badge.
 class HardwareStatusHud extends ConsumerWidget {
   const HardwareStatusHud({super.key});
 
@@ -80,7 +80,7 @@ class HardwareStatusHud extends ConsumerWidget {
                 const SizedBox(width: 8),
                 // Edge AI indicator
                 Text(
-                  'TFLite Local (${telemetry.localInferenceLatencyMs}ms)',
+                  'ONNX Local (${telemetry.localInferenceLatencyMs}ms)',
                   style: AppTypography.telemetrySmall.copyWith(
                     color: AppColors.secondary,
                     fontSize: 10,
