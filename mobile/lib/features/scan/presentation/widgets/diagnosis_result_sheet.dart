@@ -61,6 +61,44 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
     return 'Tomato';
   }
 
+  String _resolveMasterVerdictTitle(DiagnosticScanResult result, CalibratedTelemetry telemetry) {
+    if (result.detectedCondition.contains('&') ||
+        telemetry.isMoistureWarning ||
+        telemetry.isTemperatureWarning ||
+        telemetry.isHumidityWarning) {
+      return 'BOTH: DISEASE & ENVIRONMENT PROBLEM';
+    }
+    if (result.severity == DiagnosticSeverity.healthy) {
+      return 'HEALTHY CANOPY: OPTIMAL CONDITIONS';
+    }
+    return 'FOLIAR PATHOLOGY DETECTED';
+  }
+
+  String _resolveMasterVerdictDescription(
+    DiagnosticScanResult result,
+    CalibratedTelemetry telemetry,
+    PlantModel? plant,
+  ) {
+    final cropName = plant?.name ?? (result.targetCrop.isNotEmpty ? result.targetCrop : 'plant');
+    final condition = result.detectedCondition;
+
+    if (result.severity == DiagnosticSeverity.healthy) {
+      return 'Your $cropName foliage is clean, turgid, and pathogen-free. Surrounding root-zone moisture (${telemetry.formattedMoisture}) and climate (${telemetry.formattedTemperature}) are optimal.';
+    }
+
+    if (telemetry.soilMoisturePercent > 70) {
+      return 'Your $cropName leaf has symptoms of $condition. At the same time, your soil is currently too wet (${telemetry.formattedMoisture}), which encourages fungal spores to multiply and spread quickly.';
+    } else if (telemetry.soilMoisturePercent < 25 && telemetry.isProbeInserted) {
+      return 'Your $cropName leaf shows symptoms of $condition under acute drought stress (${telemetry.formattedMoisture} moisture), weakening foliar defenses.';
+    } else if (telemetry.isTemperatureWarning) {
+      return 'Your $cropName leaf shows symptoms of $condition exacerbated by thermal stress (${telemetry.formattedTemperature}, ${telemetry.temperatureTag}).';
+    } else if (telemetry.isHumidityWarning) {
+      return 'Your $cropName leaf has symptoms of $condition. Ambient humidity is stagnant (${telemetry.formattedHumidity}), prolonging leaf surface wetness.';
+    }
+
+    return 'Your $cropName leaf shows symptoms of $condition (${result.scientificPathogen}). Surrounding root-zone telemetry is within stable agronomic thresholds.';
+  }
+
   void _openPlantPickerSheet(BuildContext context, List<PlantModel> plants) {
     showModalBottomSheet<void>(
       context: context,
@@ -248,7 +286,11 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                         ],
                                       ),
                                       Text(
-                                        'Roma Tomato, Balcony Pot',
+                                        activePlant != null
+                                            ? '${activePlant.name}, ${activePlant.variety}'
+                                            : (widget.result.targetCrop.isNotEmpty
+                                                ? widget.result.targetCrop
+                                                : 'Roma Tomato, Balcony Pot'),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: AppTypography.headlineSmall.copyWith(
@@ -344,7 +386,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'BOTH: DISEASE & ENVIRONMENT PROBLEM',
+                            _resolveMasterVerdictTitle(widget.result, telemetry),
                             style: AppTypography.headlineSmall.copyWith(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
@@ -354,7 +396,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Your tomato leaf has early fungal leaf spots (Early Blight). At the same time, your soil is currently too wet, which encourages the fungus to spread quickly.',
+                            _resolveMasterVerdictDescription(widget.result, telemetry, activePlant),
                             style: AppTypography.bodySmall.copyWith(
                               color: AppColors.onSurfaceVariant,
                               fontSize: 13,
@@ -495,7 +537,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   ),
                                 ),
                                 Text(
-                                  'Distinct bullseye rings',
+                                  widget.result.symptoms.isNotEmpty
+                                      ? widget.result.symptoms.first
+                                      : 'Visual lesions confirmed on leaf canopy',
                                   style: AppTypography.bodySmall.copyWith(
                                     fontSize: 10,
                                     color: AppColors.onSurfaceVariant,
@@ -556,14 +600,14 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Early Blight',
+                                  widget.result.detectedCondition.split('&').first.trim(),
                                   style: AppTypography.bodySmall.copyWith(
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.onSurface,
                                   ),
                                 ),
                                 Text(
-                                  'Alternaria solani',
+                                  widget.result.scientificPathogen,
                                   style: AppTypography.bodySmall.copyWith(
                                     fontSize: 10,
                                     fontStyle: FontStyle.italic,
@@ -660,7 +704,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       isExpanded: _showWhyMoisture,
                       onToggleWhy: () => setState(() => _showWhyMoisture = !_showWhyMoisture),
                       whyText:
-                          'Why Soil Moisture Matters: Saturated soil limits root oxygen and triggers spore multiplication of soil-borne blight pathogens that splash onto lower foliage.',
+                          'Why Soil Moisture Matters: Proper root zone moisture (${telemetry.formattedMoisture}) ensures ${activePlant?.name ?? targetCropCategory} roots absorb vital minerals without waterlogging that favors soil-borne blight pathogens.',
                     ),
                     const SizedBox(height: 8),
 
@@ -669,7 +713,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       title: 'Air Temperature',
                       icon: Icons.thermostat,
                       value: telemetry.formattedTemperature,
-                      target: 'Target: 22–30°C',
+                      target: 'Target: 20–30°C',
                       statusTag: telemetry.temperatureTag,
                       isError: telemetry.isTemperatureWarning,
                       summary: telemetry.temperatureCelsius > 32
@@ -680,7 +724,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       isExpanded: _showWhyTemp,
                       onToggleWhy: () => setState(() => _showWhyTemp = !_showWhyTemp),
                       whyText:
-                          'Why Temperature Matters: Roma tomatoes metabolize sugars efficiently between 22°C and 30°C. 28°C supports cellular repair while plants fight off leaf infections.',
+                          'Why Temperature Matters: ${activePlant?.name ?? targetCropCategory} plants metabolize carbohydrates efficiently between 20°C and 30°C. Current reading of ${telemetry.formattedTemperature} (${telemetry.temperatureTag}) directly impacts cellular repair during foliar defense.',
                     ),
                     const SizedBox(height: 8),
 
@@ -700,7 +744,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       isExpanded: _showWhyHumidity,
                       onToggleWhy: () => setState(() => _showWhyHumidity = !_showWhyHumidity),
                       whyText:
-                          'Why Humidity Matters: Stagnant balcony humidity above 75% keeps water drops lingering on leaves, which acts as a germination incubator for fungal spores.',
+                          'Why Humidity Matters: Ambient humidity (${telemetry.formattedHumidity}) above 75% keeps water drops lingering on ${activePlant?.name ?? targetCropCategory} leaves, acting as a germination incubator for fungal pathogens.',
                     ),
                     const SizedBox(height: 8),
 
@@ -720,7 +764,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       isExpanded: _showWhyLight,
                       onToggleWhy: () => setState(() => _showWhyLight = !_showWhyLight),
                       whyText:
-                          'Why Light Matters: Strong natural sunlight boosts tomato leaf cuticle thickness and speeds surface evaporation, strengthening plant natural defense.',
+                          'Why Light Matters: Solar illuminance (${telemetry.formattedLight}) boosts cuticle thickness on ${activePlant?.name ?? targetCropCategory} foliage, preventing spore penetrations and maintaining defensive vigor.',
                     ),
 
                     const SizedBox(height: 18),

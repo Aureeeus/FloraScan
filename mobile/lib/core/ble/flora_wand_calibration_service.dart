@@ -64,6 +64,43 @@ class CalibratedTelemetry {
       ? '${(lightLux / 1000).toStringAsFixed(1)}k Lux'
       : '${lightLux.toStringAsFixed(0)} Lux';
 
+  /// Returns a copy of [CalibratedTelemetry] with updated fields.
+  CalibratedTelemetry copyWith({
+    double? soilMoisturePercent,
+    String? soilMoistureTag,
+    bool? isMoistureWarning,
+    double? temperatureCelsius,
+    String? temperatureTag,
+    bool? isTemperatureWarning,
+    double? humidityPercent,
+    String? humidityTag,
+    bool? isHumidityWarning,
+    double? lightLux,
+    String? lightTag,
+    bool? isLightWarning,
+    int? batteryPercent,
+    bool? isProbeInserted,
+    DateTime? timestamp,
+  }) {
+    return CalibratedTelemetry(
+      soilMoisturePercent: soilMoisturePercent ?? this.soilMoisturePercent,
+      soilMoistureTag: soilMoistureTag ?? this.soilMoistureTag,
+      isMoistureWarning: isMoistureWarning ?? this.isMoistureWarning,
+      temperatureCelsius: temperatureCelsius ?? this.temperatureCelsius,
+      temperatureTag: temperatureTag ?? this.temperatureTag,
+      isTemperatureWarning: isTemperatureWarning ?? this.isTemperatureWarning,
+      humidityPercent: humidityPercent ?? this.humidityPercent,
+      humidityTag: humidityTag ?? this.humidityTag,
+      isHumidityWarning: isHumidityWarning ?? this.isHumidityWarning,
+      lightLux: lightLux ?? this.lightLux,
+      lightTag: lightTag ?? this.lightTag,
+      isLightWarning: isLightWarning ?? this.isLightWarning,
+      batteryPercent: batteryPercent ?? this.batteryPercent,
+      isProbeInserted: isProbeInserted ?? this.isProbeInserted,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
+
   /// Factory creating fallback offline / default readings.
   factory CalibratedTelemetry.initial() {
     return CalibratedTelemetry(

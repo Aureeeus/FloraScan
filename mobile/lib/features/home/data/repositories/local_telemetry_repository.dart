@@ -48,8 +48,8 @@ class LocalTelemetryRepository implements TelemetryRepository {
         moisture = (plant['soil_moisture_percent'] as num?)?.toDouble() ?? 0.0;
         temp = (plant['soil_temperature_celsius'] as num?)?.toDouble() ?? 0.0;
         ec = 1.4;
-        humidity = 55.0;
-        par = 800.0;
+        humidity = 0.0;
+        par = 0.0;
         lastUpdated = DateTime.tryParse(plant['last_scanned_at'] as String? ?? '') ?? lastUpdated;
       }
     }

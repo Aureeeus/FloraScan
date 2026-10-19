@@ -385,12 +385,8 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
           final battBytes = await batteryChar.read();
           if (battBytes.isNotEmpty) {
             final batt = battBytes.first.clamp(0, 100);
-            _applyCalibratedTelemetry(
-              rawMoisture: 2200,
-              rawTemperature: state.telemetry.temperatureCelsius,
-              rawHumidity: state.telemetry.humidityPercent,
-              rawLight: state.telemetry.lightLux,
-              rawBattery: batt,
+            state = state.copyWith(
+              telemetry: state.telemetry.copyWith(batteryPercent: batt),
             );
           }
         } catch (_) {}
@@ -540,10 +536,11 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     try {
       final dynamic parsed = jsonDecode(text);
       if (parsed is Map<String, dynamic>) {
-        final rawMoisture = _extractNumeric(parsed, ['moisture', 'soil', 'm', 'rawmoisture', 'soil_moisture'])?.toInt() ?? 2200;
-        final rawTemp = _extractNumeric(parsed, ['temp', 'temperature', 't', 'soil_temperature', 'air_temp'])?.toDouble() ?? 26.0;
-        final rawHumidity = _extractNumeric(parsed, ['humidity', 'hum', 'h', 'ambient_humidity'])?.toDouble() ?? 65.0;
-        final rawLight = _extractNumeric(parsed, ['light', 'lux', 'l', 'par', 'solar_radiation'])?.toDouble() ?? 800.0;
+        final currentMoistureAdc = (3200 - (state.telemetry.soilMoisturePercent / 100.0 * 2000)).round();
+        final rawMoisture = _extractNumeric(parsed, ['moisture', 'soil', 'm', 'rawmoisture', 'soil_moisture'])?.toInt() ?? currentMoistureAdc;
+        final rawTemp = _extractNumeric(parsed, ['temp', 'temperature', 't', 'soil_temperature', 'air_temp'])?.toDouble() ?? state.telemetry.temperatureCelsius;
+        final rawHumidity = _extractNumeric(parsed, ['humidity', 'hum', 'h', 'ambient_humidity'])?.toDouble() ?? state.telemetry.humidityPercent;
+        final rawLight = _extractNumeric(parsed, ['light', 'lux', 'l', 'par', 'solar_radiation'])?.toDouble() ?? state.telemetry.lightLux;
         final rawBattery = _extractNumeric(parsed, ['battery', 'batt', 'b', 'pwr'])?.toInt() ?? state.telemetry.batteryPercent;
 
         _applyCalibratedTelemetry(
@@ -586,10 +583,11 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     if (battMatch != null) matches++;
 
     if (matches >= 2 || (matches == 1 && moistureMatch != null)) {
-      final rawMoisture = moistureMatch != null ? (double.tryParse(moistureMatch.group(1)!)?.toInt() ?? 2200) : 2200;
-      final temp = tempMatch != null ? (double.tryParse(tempMatch.group(1)!) ?? 26.0) : 26.0;
-      final hum = humMatch != null ? (double.tryParse(humMatch.group(1)!) ?? 65.0) : 65.0;
-      final light = lightMatch != null ? (double.tryParse(lightMatch.group(1)!) ?? 800.0) : 800.0;
+      final currentMoistureAdc = (3200 - (state.telemetry.soilMoisturePercent / 100.0 * 2000)).round();
+      final rawMoisture = moistureMatch != null ? (double.tryParse(moistureMatch.group(1)!)?.toInt() ?? currentMoistureAdc) : currentMoistureAdc;
+      final temp = tempMatch != null ? (double.tryParse(tempMatch.group(1)!) ?? state.telemetry.temperatureCelsius) : state.telemetry.temperatureCelsius;
+      final hum = humMatch != null ? (double.tryParse(humMatch.group(1)!) ?? state.telemetry.humidityPercent) : state.telemetry.humidityPercent;
+      final light = lightMatch != null ? (double.tryParse(lightMatch.group(1)!) ?? state.telemetry.lightLux) : state.telemetry.lightLux;
       final batt = battMatch != null
           ? (int.tryParse(battMatch.group(1)!) ?? state.telemetry.batteryPercent)
           : state.telemetry.batteryPercent;

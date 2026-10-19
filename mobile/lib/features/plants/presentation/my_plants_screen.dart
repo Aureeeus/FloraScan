@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/ble/flora_wand_ble_service.dart';
 import '../../../core/routing/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -663,6 +664,8 @@ class _MyPlantsScreenState extends ConsumerState<MyPlantsScreen> {
                       (p) => p.id == _selectedPlantId,
                       orElse: () => allPlants.first,
                     );
+                    final wandState = ref.watch(floraWandNotifierProvider);
+                    final isWandConnected = wandState.isConnected;
                     final syncHour = focalPlant.lastScannedAt.hour.toString().padLeft(2, '0');
                     final syncMinute = focalPlant.lastScannedAt.minute.toString().padLeft(2, '0');
                     final moistureLow = focalPlant.soilMoisturePercent < 30;
@@ -799,10 +802,13 @@ class _MyPlantsScreenState extends ConsumerState<MyPlantsScreen> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'Sync: $syncHour:$syncMinute',
+                                  isWandConnected
+                                      ? 'Live BLE (${wandState.telemetry.batteryPercent}%)'
+                                      : 'Sync: $syncHour:$syncMinute',
                                   style: AppTypography.telemetrySmall.copyWith(
-                                    color: AppColors.onSurfaceVariant,
+                                    color: isWandConnected ? AppColors.secondary : AppColors.onSurfaceVariant,
                                     fontSize: 11,
+                                    fontWeight: isWandConnected ? FontWeight.w700 : FontWeight.w500,
                                   ),
                                 ),
                               ],
@@ -810,7 +816,7 @@ class _MyPlantsScreenState extends ConsumerState<MyPlantsScreen> {
 
                             const SizedBox(height: 10),
 
-                            // 4 Sensors Snapshot
+                            // 4 Sensors Snapshot (Live BLE if connected, DB history if offline)
                             GridView.count(
                               crossAxisCount: 2,
                               crossAxisSpacing: 8,
@@ -822,62 +828,106 @@ class _MyPlantsScreenState extends ConsumerState<MyPlantsScreen> {
                                 _buildDetailSensorBox(
                                   title: 'Soil Moisture',
                                   icon: Icons.water_drop,
-                                  iconColor: moistureLow ? AppColors.error : AppColors.secondary,
-                                  tag: moistureLow
-                                      ? 'TOO LOW ⚠️'
-                                      : moistureHigh
-                                          ? 'TOO HIGH ⚠️'
-                                          : 'GOOD',
-                                  tagColor: moistureLow
-                                      ? AppColors.onErrorContainer
-                                      : AppColors.onSecondaryFixedVariant,
-                                  tagBg: moistureLow
-                                      ? AppColors.errorContainer
-                                      : AppColors.secondaryFixed,
-                                  value: '${focalPlant.soilMoisturePercent.toStringAsFixed(0)}%',
-                                  subvalue: '/ 60% opt',
-                                  progress: (focalPlant.soilMoisturePercent / 100.0).clamp(0.0, 1.0),
-                                  progressColor: moistureLow ? AppColors.error : AppColors.secondary,
+                                  iconColor: isWandConnected
+                                      ? (wandState.telemetry.isMoistureWarning ? AppColors.error : AppColors.secondary)
+                                      : (moistureLow ? AppColors.error : AppColors.secondary),
+                                  tag: isWandConnected
+                                      ? wandState.telemetry.soilMoistureTag.toUpperCase()
+                                      : (moistureLow ? 'TOO LOW ⚠️' : moistureHigh ? 'TOO HIGH ⚠️' : 'GOOD'),
+                                  tagColor: isWandConnected
+                                      ? (wandState.telemetry.isMoistureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
+                                      : (moistureLow ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
+                                  tagBg: isWandConnected
+                                      ? (wandState.telemetry.isMoistureWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
+                                      : (moistureLow ? AppColors.errorContainer : AppColors.secondaryFixed),
+                                  value: isWandConnected
+                                      ? wandState.telemetry.formattedMoisture
+                                      : '${focalPlant.soilMoisturePercent.toStringAsFixed(0)}%',
+                                  subvalue: isWandConnected ? 'Live Sensor' : '/ 60% opt',
+                                  progress: isWandConnected
+                                      ? (wandState.telemetry.soilMoisturePercent / 100.0).clamp(0.0, 1.0)
+                                      : (focalPlant.soilMoisturePercent / 100.0).clamp(0.0, 1.0),
+                                  progressColor: isWandConnected
+                                      ? (wandState.telemetry.isMoistureWarning ? AppColors.error : AppColors.secondary)
+                                      : (moistureLow ? AppColors.error : AppColors.secondary),
                                 ),
                                 _buildDetailSensorBox(
                                   title: 'Air Temp',
                                   icon: Icons.thermostat,
-                                  iconColor: AppColors.secondary,
-                                  tag: tempHigh ? 'HIGH' : tempLow ? 'LOW' : 'GOOD',
-                                  tagColor: AppColors.onSecondaryFixedVariant,
-                                  tagBg: AppColors.secondaryFixed,
-                                  value: '${focalPlant.soilTemperatureCelsius.toStringAsFixed(1)}°C',
-                                  subvalue: 'Ideal 22-28°',
-                                  progress: (((focalPlant.soilTemperatureCelsius) - 10) / 30.0).clamp(0.0, 1.0),
-                                  progressColor: AppColors.secondary,
-                                ),
-                                _buildDetailSensorBox(
-                                  title: 'Stage',
-                                  icon: Icons.spa,
-                                  iconColor: AppColors.secondary,
-                                  tag: isCritical ? 'CRITICAL' : isCaution ? 'CAUTION' : 'GOOD',
-                                  tagColor: isCritical
+                                  iconColor: isWandConnected
+                                      ? (wandState.telemetry.isTemperatureWarning ? AppColors.error : AppColors.secondary)
+                                      : AppColors.secondary,
+                                  tag: isWandConnected
+                                      ? wandState.telemetry.temperatureTag.toUpperCase()
+                                      : (tempHigh ? 'HIGH' : tempLow ? 'LOW' : 'GOOD'),
+                                  tagColor: isWandConnected && wandState.telemetry.isTemperatureWarning
                                       ? AppColors.onErrorContainer
                                       : AppColors.onSecondaryFixedVariant,
-                                  tagBg: isCritical
+                                  tagBg: isWandConnected && wandState.telemetry.isTemperatureWarning
                                       ? AppColors.errorContainer
                                       : AppColors.secondaryFixed,
-                                  value: focalPlant.stage.name.toUpperCase(),
-                                  subvalue: focalPlant.cropFamily,
-                                  progress: ((focalPlant.stage.index + 1) / CropGrowthStage.values.length).clamp(0.0, 1.0),
-                                  progressColor: isCritical ? AppColors.error : AppColors.secondary,
+                                  value: isWandConnected
+                                      ? wandState.telemetry.formattedTemperature
+                                      : '${focalPlant.soilTemperatureCelsius.toStringAsFixed(1)}°C',
+                                  subvalue: isWandConnected ? 'Live Sensor' : 'Ideal 22-28°',
+                                  progress: isWandConnected
+                                      ? (((wandState.telemetry.temperatureCelsius) - 10) / 30.0).clamp(0.0, 1.0)
+                                      : (((focalPlant.soilTemperatureCelsius) - 10) / 30.0).clamp(0.0, 1.0),
+                                  progressColor: isWandConnected && wandState.telemetry.isTemperatureWarning
+                                      ? AppColors.error
+                                      : AppColors.secondary,
                                 ),
                                 _buildDetailSensorBox(
-                                  title: 'Nutrient / NPK',
-                                  icon: Icons.science,
-                                  iconColor: AppColors.secondary,
-                                  tag: hasDeficit ? 'DEFICIT' : 'BALANCED',
-                                  tagColor: hasDeficit ? AppColors.onErrorContainer : AppColors.onTertiaryFixed,
-                                  tagBg: hasDeficit ? AppColors.errorContainer : AppColors.tertiaryFixed,
-                                  value: focalPlant.npkSummary.split(' ').first,
-                                  subvalue: focalPlant.npkSummary,
-                                  progress: 0.75,
-                                  progressColor: AppColors.tertiaryFixedDim,
+                                  title: isWandConnected ? 'Humidity' : 'Stage',
+                                  icon: isWandConnected ? Icons.cloud : Icons.spa,
+                                  iconColor: isWandConnected
+                                      ? (wandState.telemetry.isHumidityWarning ? AppColors.error : AppColors.secondary)
+                                      : AppColors.secondary,
+                                  tag: isWandConnected
+                                      ? wandState.telemetry.humidityTag.toUpperCase()
+                                      : (isCritical ? 'CRITICAL' : isCaution ? 'CAUTION' : 'GOOD'),
+                                  tagColor: isWandConnected
+                                      ? (wandState.telemetry.isHumidityWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
+                                      : (isCritical ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
+                                  tagBg: isWandConnected
+                                      ? (wandState.telemetry.isHumidityWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
+                                      : (isCritical ? AppColors.errorContainer : AppColors.secondaryFixed),
+                                  value: isWandConnected
+                                      ? wandState.telemetry.formattedHumidity
+                                      : focalPlant.stage.name.toUpperCase(),
+                                  subvalue: isWandConnected ? 'Live Sensor' : focalPlant.cropFamily,
+                                  progress: isWandConnected
+                                      ? (wandState.telemetry.humidityPercent / 100.0).clamp(0.0, 1.0)
+                                      : ((focalPlant.stage.index + 1) / CropGrowthStage.values.length).clamp(0.0, 1.0),
+                                  progressColor: isWandConnected
+                                      ? (wandState.telemetry.isHumidityWarning ? AppColors.error : AppColors.secondary)
+                                      : (isCritical ? AppColors.error : AppColors.secondary),
+                                ),
+                                _buildDetailSensorBox(
+                                  title: isWandConnected ? 'Light Lux' : 'Nutrient / NPK',
+                                  icon: isWandConnected ? Icons.wb_sunny : Icons.science,
+                                  iconColor: isWandConnected
+                                      ? (wandState.telemetry.isLightWarning ? AppColors.error : AppColors.secondary)
+                                      : AppColors.secondary,
+                                  tag: isWandConnected
+                                      ? wandState.telemetry.lightTag.toUpperCase()
+                                      : (hasDeficit ? 'DEFICIT' : 'BALANCED'),
+                                  tagColor: isWandConnected
+                                      ? (wandState.telemetry.isLightWarning ? AppColors.onErrorContainer : AppColors.onTertiaryFixed)
+                                      : (hasDeficit ? AppColors.onErrorContainer : AppColors.onTertiaryFixed),
+                                  tagBg: isWandConnected
+                                      ? (wandState.telemetry.isLightWarning ? AppColors.errorContainer : AppColors.tertiaryFixed)
+                                      : (hasDeficit ? AppColors.errorContainer : AppColors.tertiaryFixed),
+                                  value: isWandConnected
+                                      ? wandState.telemetry.formattedLight
+                                      : focalPlant.npkSummary.split(' ').first,
+                                  subvalue: isWandConnected ? 'Live Sensor' : focalPlant.npkSummary,
+                                  progress: isWandConnected
+                                      ? (wandState.telemetry.lightLux / 1200.0).clamp(0.0, 1.0)
+                                      : 0.75,
+                                  progressColor: isWandConnected && wandState.telemetry.isLightWarning
+                                      ? AppColors.error
+                                      : AppColors.tertiaryFixedDim,
                                 ),
                               ],
                             ),

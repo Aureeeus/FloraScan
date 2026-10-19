@@ -27,17 +27,18 @@ final liveTelemetryProvider = Provider<AsyncValue<FieldTelemetrySnapshot>>((ref)
   final wandState = ref.watch(floraWandNotifierProvider);
 
   return baseAsync.whenData((base) {
+    final isConnected = wandState.isConnected;
     return FieldTelemetrySnapshot(
-      soilMoisturePercent: wandState.telemetry.soilMoisturePercent,
-      soilTemperatureCelsius: wandState.telemetry.temperatureCelsius,
+      soilMoisturePercent: isConnected ? wandState.telemetry.soilMoisturePercent : base.soilMoisturePercent,
+      soilTemperatureCelsius: isConnected ? wandState.telemetry.temperatureCelsius : base.soilTemperatureCelsius,
       soilConductivityEc: base.soilConductivityEc,
-      ambientHumidityPercent: wandState.telemetry.humidityPercent,
-      solarRadiationPar: wandState.telemetry.lightLux,
-      isWandConnected: wandState.isConnected,
-      wandBatteryPercent: wandState.telemetry.batteryPercent,
+      ambientHumidityPercent: isConnected ? wandState.telemetry.humidityPercent : base.ambientHumidityPercent,
+      solarRadiationPar: isConnected ? wandState.telemetry.lightLux : base.solarRadiationPar,
+      isWandConnected: isConnected,
+      wandBatteryPercent: isConnected ? wandState.telemetry.batteryPercent : base.wandBatteryPercent,
       localInferenceLatencyMs: base.localInferenceLatencyMs,
       activeAlerts: [
-        if (wandState.telemetry.isMoistureWarning)
+        if (isConnected && wandState.telemetry.isMoistureWarning)
           AgronomyAlertItem(
             id: 'wand_moist_alert',
             title: 'Soil Moisture: ${wandState.telemetry.soilMoistureTag}',
@@ -50,7 +51,7 @@ final liveTelemetryProvider = Provider<AsyncValue<FieldTelemetrySnapshot>>((ref)
         else
           ...base.activeAlerts,
       ],
-      lastUpdated: wandState.lastSampledAt ?? base.lastUpdated,
+      lastUpdated: (isConnected && wandState.lastSampledAt != null) ? wandState.lastSampledAt! : base.lastUpdated,
     );
   });
 });

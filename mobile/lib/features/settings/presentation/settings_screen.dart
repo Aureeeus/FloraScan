@@ -316,9 +316,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                     const SizedBox(height: 12),
 
-                    // Telemetry baseline progress
+                    // Real-Time 4-Sensor Telemetry
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(10),
@@ -326,39 +326,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       child: Column(
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  'Optical Sensor Temp',
-                                  style: AppTypography.bodySmall.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontSize: 11,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              Expanded(
+                                child: _buildSettingSensorRow(
+                                  context,
+                                  icon: Icons.water_drop,
+                                  label: 'Moisture',
+                                  value: wandState.telemetry.formattedMoisture,
+                                  tag: wandState.telemetry.soilMoistureTag,
+                                  isWarning: wandState.telemetry.isMoistureWarning,
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '28.4°C (Optimal)',
-                                style: AppTypography.telemetrySmall.copyWith(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: _buildSettingSensorRow(
+                                  context,
+                                  icon: Icons.thermostat,
+                                  label: 'Temp',
+                                  value: wandState.telemetry.formattedTemperature,
+                                  tag: wandState.telemetry.temperatureTag,
+                                  isWarning: wandState.telemetry.isTemperatureWarning,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(9999),
-                            child: LinearProgressIndicator(
-                              value: 0.72,
-                              minHeight: 5,
-                              backgroundColor: colorScheme.surfaceContainerHighest,
-                              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.secondary),
-                            ),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildSettingSensorRow(
+                                  context,
+                                  icon: Icons.cloud,
+                                  label: 'Humidity',
+                                  value: wandState.telemetry.formattedHumidity,
+                                  tag: wandState.telemetry.humidityTag,
+                                  isWarning: wandState.telemetry.isHumidityWarning,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: _buildSettingSensorRow(
+                                  context,
+                                  icon: Icons.wb_sunny,
+                                  label: 'Light',
+                                  value: wandState.telemetry.formattedLight,
+                                  tag: wandState.telemetry.lightTag,
+                                  isWarning: wandState.telemetry.isLightWarning,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 6),
                           Row(
@@ -366,9 +382,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             children: [
                               Flexible(
                                 child: Text(
-                                  'Soil Probe Response: 12ms',
+                                  wandState.telemetry.isProbeInserted
+                                      ? 'Probe: In Soil'
+                                      : 'Probe: Open Air',
                                   style: AppTypography.bodySmall.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
+                                    color: wandState.telemetry.isProbeInserted
+                                        ? colorScheme.onSurfaceVariant
+                                        : AppColors.error,
                                     fontSize: 10,
                                   ),
                                   maxLines: 1,
@@ -377,7 +397,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Signal -48 dBm',
+                                '${wandState.connectedDevice?.rssi ?? -58} dBm',
                                 style: AppTypography.telemetrySmall.copyWith(
                                   fontSize: 10,
                                   color: colorScheme.onSurfaceVariant,
@@ -1258,6 +1278,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSettingSensorRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required String tag,
+    required bool isWarning,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 13,
+          color: isWarning ? AppColors.error : AppColors.secondary,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            '$label: $value',
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: isWarning ? AppColors.error : colorScheme.onSurface,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '($tag)',
+          style: AppTypography.labelUi.copyWith(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: isWarning ? AppColors.error : colorScheme.primary,
+          ),
+          maxLines: 1,
+        ),
+      ],
     );
   }
 }

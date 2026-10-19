@@ -32,3 +32,4 @@ class FloraScanApp extends ConsumerWidget {
     );
   }
 }
+

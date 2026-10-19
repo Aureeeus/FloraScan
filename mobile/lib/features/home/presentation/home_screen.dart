@@ -211,8 +211,8 @@ class HomeScreen extends ConsumerWidget {
     final defaultTemp = plants.isNotEmpty ? plants.first.soilTemperatureCelsius : (telemetry?.soilTemperatureCelsius ?? 0.0);
     final effectiveMoisture = isConnected ? wandState.telemetry.soilMoisturePercent : (telemetry?.soilMoisturePercent ?? defaultMoisture);
     final effectiveTemp = isConnected ? wandState.telemetry.temperatureCelsius : (telemetry?.soilTemperatureCelsius ?? defaultTemp);
-    final effectiveHumidity = isConnected ? wandState.telemetry.humidityPercent : (telemetry?.ambientHumidityPercent ?? 55.0);
-    final effectivePar = isConnected ? wandState.telemetry.lightLux : (telemetry?.solarRadiationPar ?? 800.0);
+    final effectiveHumidity = isConnected ? wandState.telemetry.humidityPercent : (telemetry?.ambientHumidityPercent ?? 0.0);
+    final effectivePar = isConnected ? wandState.telemetry.lightLux : (telemetry?.solarRadiationPar ?? 0.0);
 
     final moistureVal = hasData ? effectiveMoisture.toStringAsFixed(0) : '--';
     final moistureProgress = hasData ? (effectiveMoisture / 100.0).clamp(0.0, 1.0) : 0.0;
@@ -345,9 +345,15 @@ class HomeScreen extends ConsumerWidget {
                 icon: Icons.water_drop,
                 iconColor: AppColors.secondary,
                 label: 'Soil Moist.',
-                statusTag: isConnected ? wandState.telemetry.soilMoistureTag : ((telemetry?.soilMoisturePercent ?? 64) < 25 ? 'Low' : 'Good'),
-                statusBg: isConnected && wandState.telemetry.isMoistureWarning ? AppColors.errorContainer : AppColors.secondaryFixed,
-                statusTextColor: isConnected && wandState.telemetry.isMoistureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant,
+                statusTag: isConnected
+                    ? wandState.telemetry.soilMoistureTag
+                    : (!hasData ? 'Standby' : (effectiveMoisture < 25 ? 'Low' : (effectiveMoisture > 75 ? 'Wet' : 'Good'))),
+                statusBg: isConnected
+                    ? (wandState.telemetry.isMoistureWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
+                    : (hasData && (effectiveMoisture < 25 || effectiveMoisture > 75) ? AppColors.errorContainer : AppColors.secondaryFixed),
+                statusTextColor: isConnected
+                    ? (wandState.telemetry.isMoistureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
+                    : (hasData && (effectiveMoisture < 25 || effectiveMoisture > 75) ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
                 numericValue: moistureVal,
                 unit: '%',
                 progressPercent: moistureProgress,
@@ -357,9 +363,15 @@ class HomeScreen extends ConsumerWidget {
                 icon: Icons.thermostat,
                 iconColor: AppColors.tertiaryContainer,
                 label: 'Air Temp',
-                statusTag: isConnected ? wandState.telemetry.temperatureTag : 'Good',
-                statusBg: isConnected && wandState.telemetry.isTemperatureWarning ? AppColors.errorContainer : AppColors.secondaryFixed,
-                statusTextColor: isConnected && wandState.telemetry.isTemperatureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant,
+                statusTag: isConnected
+                    ? wandState.telemetry.temperatureTag
+                    : (!hasData ? 'Standby' : (effectiveTemp < 18 ? 'Cool' : (effectiveTemp > 32 ? 'Warm' : 'Good'))),
+                statusBg: isConnected
+                    ? (wandState.telemetry.isTemperatureWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
+                    : (hasData && (effectiveTemp < 18 || effectiveTemp > 32) ? AppColors.errorContainer : AppColors.secondaryFixed),
+                statusTextColor: isConnected
+                    ? (wandState.telemetry.isTemperatureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
+                    : (hasData && (effectiveTemp < 18 || effectiveTemp > 32) ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
                 numericValue: tempVal,
                 unit: '°C',
                 progressPercent: tempProgress,
@@ -369,9 +381,15 @@ class HomeScreen extends ConsumerWidget {
                 icon: Icons.cloud,
                 iconColor: AppColors.secondary,
                 label: 'Humidity',
-                statusTag: isConnected ? wandState.telemetry.humidityTag : 'Good',
-                statusBg: isConnected && wandState.telemetry.isHumidityWarning ? AppColors.errorContainer : AppColors.secondaryFixed,
-                statusTextColor: isConnected && wandState.telemetry.isHumidityWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant,
+                statusTag: isConnected
+                    ? wandState.telemetry.humidityTag
+                    : (!hasData ? 'Standby' : (effectiveHumidity < 40 ? 'Dry' : (effectiveHumidity > 75 ? 'Humid' : 'Good'))),
+                statusBg: isConnected
+                    ? (wandState.telemetry.isHumidityWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
+                    : (hasData && (effectiveHumidity < 40 || effectiveHumidity > 75) ? AppColors.errorContainer : AppColors.secondaryFixed),
+                statusTextColor: isConnected
+                    ? (wandState.telemetry.isHumidityWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
+                    : (hasData && (effectiveHumidity < 40 || effectiveHumidity > 75) ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
                 numericValue: humidityVal,
                 unit: '%',
                 progressPercent: humidityProgress,
@@ -381,7 +399,9 @@ class HomeScreen extends ConsumerWidget {
                 icon: Icons.wb_sunny,
                 iconColor: AppColors.tertiaryFixedDim,
                 label: 'Light Lux',
-                statusTag: isConnected ? wandState.telemetry.lightTag : (hasData ? (effectivePar > 600 ? 'Bright' : 'Normal') : 'Standby'),
+                statusTag: isConnected
+                    ? wandState.telemetry.lightTag
+                    : (!hasData ? 'Standby' : (effectivePar > 600 ? 'Bright' : 'Normal')),
                 statusBg: isConnected && wandState.telemetry.isLightWarning ? AppColors.errorContainer : AppColors.tertiaryFixed,
                 statusTextColor: isConnected && wandState.telemetry.isLightWarning ? AppColors.onErrorContainer : AppColors.onTertiaryFixed,
                 numericValue: parVal,
