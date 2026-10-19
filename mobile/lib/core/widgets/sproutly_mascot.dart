@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// Cheerful Sproutly Mascot ("Sprouty / Plantito") widget faithful to Google Stitch.
+/// Cheerful Sproutly Mascot ("Sprouty") widget faithful to Google Stitch.
 class SproutlyMascot extends StatelessWidget {
   const SproutlyMascot({
     super.key,

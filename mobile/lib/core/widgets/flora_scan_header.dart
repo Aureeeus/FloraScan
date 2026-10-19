@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../ble/flora_wand_ble_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'app_icon.dart';
@@ -24,17 +26,21 @@ class FloraScanHeader extends StatefulWidget implements PreferredSizeWidget {
 }
 
 class _FloraScanHeaderState extends State<FloraScanHeader> {
-  bool _isEnglish = true;
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.92),
-        border: const Border(
-          bottom: BorderSide(color: Color(0x10000000), width: 1),
+        color: colorScheme.surface.withValues(alpha: 0.92),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.3) : const Color(0x10000000),
+            width: 1,
+          ),
         ),
         boxShadow: const [
           BoxShadow(
@@ -55,7 +61,7 @@ class _FloraScanHeaderState extends State<FloraScanHeader> {
                 children: [
                   if (widget.showBack)
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
+                      icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
                       onPressed: widget.onBack ?? () => Navigator.maybePop(context),
                     )
                   else
@@ -71,7 +77,7 @@ class _FloraScanHeaderState extends State<FloraScanHeader> {
                         Text(
                           'FloraScan',
                           style: AppTypography.headlineMedium.copyWith(
-                            color: AppColors.primaryContainer,
+                            color: isDark ? colorScheme.primary : AppColors.primaryContainer,
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
                             height: 1.1,
@@ -96,76 +102,57 @@ class _FloraScanHeaderState extends State<FloraScanHeader> {
               ),
             ),
             const SizedBox(width: 8),
-            // Right: Responsive Wand Status (matches Stitch hidden sm:flex) + Language toggle + Profile Avatar
+            // Right: Responsive Wand Status + Profile Avatar
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (MediaQuery.sizeOf(context).width > 420) ...[
-                  // Wand status pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.secondary,
-                          ),
+                  // Reactive wand status pill
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final wandState = ref.watch(floraWandNotifierProvider);
+                      final isConnected = wandState.isConnected;
+                      final dotColor = isConnected
+                          ? AppColors.secondary
+                          : (wandState.isScanning ? AppColors.tertiary : AppColors.error);
+                      final text = isConnected
+                          ? 'Wand ${wandState.telemetry.batteryPercent}%'
+                          : (wandState.isScanning ? 'Wand...' : 'Wand Off');
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(9999),
+                          border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
                         ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Wand 94%',
-                          style: AppTypography.telemetrySmall.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: dotColor,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              text,
+                              style: AppTypography.telemetrySmall.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 8),
                 ],
-                // Language Switcher
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      _isEnglish = !_isEnglish;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(_isEnglish ? 'Switched to English' : 'Lumipat sa Filipino'),
-                        duration: const Duration(milliseconds: 900),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _isEnglish ? 'EN | FIL' : 'FIL | EN',
-                      style: AppTypography.labelUi.copyWith(
-                        color: AppColors.onSurface,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 // Profile Avatar
                 Container(
                   width: 32,

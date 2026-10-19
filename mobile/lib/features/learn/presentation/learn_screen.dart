@@ -5,6 +5,103 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/flora_scan_header.dart';
 import '../../../core/widgets/sproutly_mascot.dart';
+import '../domain/entities/lesson_progress.dart';
+import 'providers/learn_providers.dart';
+
+/// Metadata definition for interactive agronomy micro-lessons.
+class _LessonDefinition {
+  const _LessonDefinition({
+    required this.id,
+    required this.number,
+    required this.title,
+    required this.subtitle,
+    required this.duration,
+    required this.icon,
+    required this.storyTitle,
+    required this.goodTip,
+    required this.poorTip,
+  });
+
+  final String id;
+  final int number;
+  final String title;
+  final String subtitle;
+  final String duration;
+  final IconData icon;
+  final String storyTitle;
+  final String goodTip;
+  final String poorTip;
+  final int totalSteps = 4;
+}
+
+const _kAllLessons = [
+  _LessonDefinition(
+    id: 'lesson_1',
+    number: 1,
+    title: 'Charging & Pairing Wand',
+    subtitle: 'Fast BLE auto-pair in garden yard',
+    duration: '30s',
+    icon: Icons.bluetooth_connected,
+    storyTitle: 'Fast BLE Auto-Pairing',
+    goodTip: 'Hold probe 2s near phone. Connects instantly.',
+    poorTip: 'Don\'t open phone Bluetooth menu. App auto-pairs.',
+  ),
+  _LessonDefinition(
+    id: 'lesson_2',
+    number: 2,
+    title: 'Using Wand in Soil',
+    subtitle: '5cm depth, 25-35% VWC & saucer triage',
+    duration: '45s',
+    icon: Icons.water_drop,
+    storyTitle: 'The 5 cm Soil Rule & Triage',
+    goodTip: 'Insert prongs 5cm deep midway between stem & pot rim.',
+    poorTip: 'Don\'t touch bare surface soil or hit pot edge.',
+  ),
+  _LessonDefinition(
+    id: 'lesson_3',
+    number: 3,
+    title: 'How to Take a Good Leaf Photo',
+    subtitle: 'Avoid glare & blurry focus in direct afternoon sunlight.',
+    duration: '45s',
+    icon: Icons.photo_camera,
+    storyTitle: 'Compare Sharp vs Blurry',
+    goodTip: 'Sharp focus on leaf veins under daylight.',
+    poorTip: 'Direct sun flare washes out diagnostic color.',
+  ),
+  _LessonDefinition(
+    id: 'lesson_4',
+    number: 4,
+    title: 'Reading Your Result',
+    subtitle: 'Sensor tiebreaker: hypoxia vs blight',
+    duration: '60s',
+    icon: Icons.speed,
+    storyTitle: 'Sensor Tiebreakers & Hypoxia',
+    goodTip: 'Check moisture >40% before assuming leaf disease.',
+    poorTip: 'Don\'t spray fungicide on overwatered roots.',
+  ),
+  _LessonDefinition(
+    id: 'lesson_5',
+    number: 5,
+    title: 'Water & Sun for 3 Crops',
+    subtitle: 'Tomato, Chili & Eggplant VWC & lux',
+    duration: '60s',
+    icon: Icons.wb_sunny,
+    storyTitle: 'Crop Light & Moisture Profiles',
+    goodTip: 'Keep tomatoes 25-35% VWC; Chili loves warmth.',
+    poorTip: 'Don\'t keep nightshade root zones waterlogged.',
+  ),
+  _LessonDefinition(
+    id: 'lesson_6',
+    number: 6,
+    title: 'Safe Garden Treatments',
+    subtitle: 'Neem at dusk, bicarb at morning & mulch',
+    duration: '45s',
+    icon: Icons.sanitizer,
+    storyTitle: 'Safe Home Remedies & Pruning',
+    goodTip: 'Apply neem oil at dusk; baking soda in early morning.',
+    poorTip: 'Never spray oils at peak midday direct sunlight.',
+  ),
+];
 
 /// Screen providing agronomic educational guides and atlas matching Google Stitch.
 class LearnScreen extends ConsumerStatefulWidget {
@@ -18,7 +115,17 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
   int _activeTabIndex = 0; // 0: Quick Lessons, 1: Problems, 2: A-Z Terms
   String _selectedProblemCrop = 'All';
 
-  void _openStoryLessonModal() {
+  void _openStoryLessonModal({
+    String lessonId = 'lesson_1',
+    int currentStep = 1,
+    int totalSteps = 4,
+    String lessonTitle = 'Fast BLE Auto-Pairing',
+    int lessonNumber = 1,
+    String goodTip = 'Hold probe 2s near phone. Connects instantly.',
+    String poorTip = 'Don\'t open phone Bluetooth menu. App auto-pairs.',
+  }) {
+    final displayStep = (currentStep == 0) ? 1 : currentStep;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -48,15 +155,18 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  children: [
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.secondary)),
-                    const SizedBox(width: 4),
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.secondary)),
-                    const SizedBox(width: 4),
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.surfaceContainerHighest)),
-                    const SizedBox(width: 4),
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.surfaceContainerHighest)),
-                  ],
+                  children: List.generate(totalSteps, (index) {
+                    final isDoneOrCurrent = index < displayStep;
+                    return Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDoneOrCurrent ? AppColors.secondary : AppColors.surfaceContainerHighest,
+                      ),
+                    );
+                  }),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -65,7 +175,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
               ],
             ),
             Text(
-              'LESSON 3 • STEP 2 OF 4',
+              'LESSON $lessonNumber • STEP $displayStep OF $totalSteps',
               style: AppTypography.labelUi.copyWith(
                 color: AppColors.secondary,
                 fontWeight: FontWeight.w700,
@@ -74,7 +184,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Compare Sharp vs Blurry',
+              lessonTitle,
               style: AppTypography.headlineSmall.copyWith(
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
@@ -122,7 +232,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Sharp focus on leaf veins under daylight.',
+                          goodTip,
                           style: AppTypography.bodySmall.copyWith(fontSize: 11),
                         ),
                       ],
@@ -168,7 +278,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Direct sun flare washes out diagnostic color.',
+                          poorTip,
                           style: AppTypography.bodySmall.copyWith(fontSize: 11),
                         ),
                       ],
@@ -179,14 +289,23 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
             ),
             const SizedBox(height: 18),
             ElevatedButton(
-              onPressed: () => Navigator.pop(modalContext),
+              onPressed: () {
+                final nextStep = (displayStep + 1).clamp(1, totalSteps);
+                final isDone = displayStep >= totalSteps;
+                ref.read(lessonProgressNotifierProvider.notifier).updateStep(
+                  lessonId,
+                  nextStep,
+                  isCompleted: isDone,
+                );
+                Navigator.pop(modalContext);
+              },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 backgroundColor: AppColors.primaryContainer,
                 foregroundColor: AppColors.onPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Got it! Continue Lesson'),
+              child: Text(displayStep >= totalSteps ? 'Complete Lesson' : 'Got it! Continue Lesson'),
             ),
           ],
         ),
@@ -196,8 +315,27 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final progressAsync = ref.watch(lessonProgressNotifierProvider);
+    final progressMap = progressAsync.value ?? const {
+      'lesson_1': LessonProgress(lessonId: 'lesson_1', isCompleted: false, lastStep: 0, totalSteps: 4),
+      'lesson_2': LessonProgress(lessonId: 'lesson_2', isCompleted: false, lastStep: 0, totalSteps: 4),
+      'lesson_3': LessonProgress(lessonId: 'lesson_3', isCompleted: false, lastStep: 0, totalSteps: 4),
+      'lesson_4': LessonProgress(lessonId: 'lesson_4', isCompleted: false, lastStep: 0, totalSteps: 4),
+      'lesson_5': LessonProgress(lessonId: 'lesson_5', isCompleted: false, lastStep: 0, totalSteps: 4),
+      'lesson_6': LessonProgress(lessonId: 'lesson_6', isCompleted: false, lastStep: 0, totalSteps: 4),
+    };
+    final activeLesson = _kAllLessons.firstWhere(
+      (l) => !(progressMap[l.id]?.isCompleted ?? false),
+      orElse: () => _kAllLessons.first,
+    );
+    final activeProgress = progressMap[activeLesson.id] ??
+        LessonProgress(lessonId: activeLesson.id, isCompleted: false, lastStep: 0, totalSteps: activeLesson.totalSteps);
+    final allDone = _kAllLessons.every((l) => progressMap[l.id]?.isCompleted ?? false);
+    final activeStep = activeProgress.lastStep == 0 ? 1 : activeProgress.lastStep;
+    final activeTotal = activeProgress.totalSteps;
+
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: const FloraScanHeader(subtitle: 'Learn'),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -222,38 +360,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.secondaryFixed,
-                              borderRadius: BorderRadius.circular(9999),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: AppColors.secondary,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'OFFLINE READY • ZERO DATA',
-                                  style: AppTypography.labelUi.copyWith(
-                                    color: AppColors.onSecondaryFixedVariant,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
                           Text(
-                            'Magandang araw!',
+                            'Good morning!',
                             style: AppTypography.headlineSmall.copyWith(
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
@@ -304,8 +412,11 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
 
               const SizedBox(height: 6),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   InkWell(
                     onTap: () {
@@ -318,6 +429,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                       );
                     },
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.replay, size: 14, color: AppColors.secondary),
                         const SizedBox(width: 4),
@@ -331,11 +443,32 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                       ],
                     ),
                   ),
-                  Text(
-                    'v2.4.0 • Local DB',
-                    style: AppTypography.telemetrySmall.copyWith(
-                      color: AppColors.outline,
-                      fontSize: 10,
+                  InkWell(
+                    onTap: () async {
+                      await ref.read(lessonProgressNotifierProvider.notifier).resetProgress();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Learning progress reset to beginning.'),
+                            duration: Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.refresh, size: 14, color: AppColors.outline),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Reset Progress',
+                          style: AppTypography.labelUi.copyWith(
+                            color: AppColors.outline,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -360,27 +493,37 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondaryFixed,
-                            borderRadius: BorderRadius.circular(9999),
-                          ),
-                          child: Text(
-                            'IN PROGRESS • 2 OF 4 CARDS',
-                            style: AppTypography.labelUi.copyWith(
-                              color: AppColors.onSecondaryFixedVariant,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondaryFixed,
+                              borderRadius: BorderRadius.circular(9999),
+                            ),
+                            child: Text(
+                              allDone
+                                  ? 'ALL LESSONS COMPLETE • 6 OF 6'
+                                  : (activeProgress.lastStep == 0
+                                      ? 'START HERE • STEP 1 OF $activeTotal CARDS'
+                                      : 'IN PROGRESS • $activeStep OF $activeTotal CARDS'),
+                              style: AppTypography.labelUi.copyWith(
+                                color: AppColors.onSecondaryFixedVariant,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.timer, size: 14, color: AppColors.onPrimaryContainer),
                             const SizedBox(width: 3),
                             Text(
-                              '30s left',
+                              '${activeLesson.duration} left',
                               style: AppTypography.telemetrySmall.copyWith(
                                 color: AppColors.onPrimaryContainer,
                                 fontSize: 11,
@@ -399,7 +542,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'How to Take a Good Leaf Photo',
+                                activeLesson.title,
                                 style: AppTypography.headlineSmall.copyWith(
                                   color: AppColors.onPrimary,
                                   fontWeight: FontWeight.w700,
@@ -408,7 +551,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Avoid glare & blurry focus in direct afternoon sunlight.',
+                                activeLesson.subtitle,
                                 style: AppTypography.bodySmall.copyWith(
                                   color: AppColors.onPrimaryContainer,
                                   fontSize: 12,
@@ -424,8 +567,8 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                             shape: BoxShape.circle,
                             color: Colors.white.withValues(alpha: 0.1),
                           ),
-                          child: const Icon(
-                            Icons.center_focus_strong,
+                          child: Icon(
+                            activeLesson.icon,
                             color: AppColors.secondaryFixed,
                             size: 20,
                           ),
@@ -436,7 +579,9 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(9999),
                       child: LinearProgressIndicator(
-                        value: 0.5,
+                        value: allDone
+                            ? 1.0
+                            : (activeProgress.lastStep / activeTotal).clamp(0.0, 1.0),
                         minHeight: 5,
                         backgroundColor: Colors.white.withValues(alpha: 0.2),
                         valueColor: const AlwaysStoppedAnimation<Color>(AppColors.secondaryFixed),
@@ -444,9 +589,23 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
-                      onPressed: _openStoryLessonModal,
+                      onPressed: () => _openStoryLessonModal(
+                        lessonId: activeLesson.id,
+                        currentStep: activeStep,
+                        totalSteps: activeTotal,
+                        lessonTitle: activeLesson.storyTitle,
+                        lessonNumber: activeLesson.number,
+                        goodTip: activeLesson.goodTip,
+                        poorTip: activeLesson.poorTip,
+                      ),
                       icon: const Icon(Icons.arrow_forward, size: 16),
-                      label: const Text('Resume Step 2 (30s)'),
+                      label: Text(
+                        allDone
+                            ? 'Review Curriculum (30s)'
+                            : (activeProgress.lastStep == 0
+                                ? 'Start Step 1 (${activeLesson.duration})'
+                                : 'Resume Step $activeStep (${activeLesson.duration})'),
+                      ),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(44),
                         backgroundColor: AppColors.secondaryFixed,
@@ -479,7 +638,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
               const SizedBox(height: 14),
 
               // TAB CONTENT PANELS
-              if (_activeTabIndex == 0) _buildLessonsTab(),
+              if (_activeTabIndex == 0) _buildLessonsTab(progressMap),
               if (_activeTabIndex == 1) _buildProblemsTab(),
               if (_activeTabIndex == 2) _buildGlossaryTab(),
 
@@ -521,33 +680,39 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
     );
   }
 
-  Widget _buildLessonsTab() {
+  Widget _buildLessonsTab(Map<String, LessonProgress> progressMap) {
+    final completedCount = progressMap.values.where((p) => p.isCompleted).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Story Lessons',
-                  style: AppTypography.headlineSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppColors.onSurface,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Story Lessons',
+                    style: AppTypography.headlineSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.onSurface,
+                    ),
                   ),
-                ),
-                Text(
-                  'Tap to launch bite-sized 30-sec tutorials',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 11,
+                  Text(
+                    'Tap to launch bite-sized 30-sec tutorials',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -555,7 +720,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                 borderRadius: BorderRadius.circular(9999),
               ),
               child: Text(
-                '4 of 6 Done',
+                '$completedCount of 6 Done',
                 style: AppTypography.telemetrySmall.copyWith(
                   color: AppColors.onSecondaryFixed,
                   fontWeight: FontWeight.w700,
@@ -567,191 +732,32 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
         ),
         const SizedBox(height: 10),
 
-        // Lesson 1
-        _buildLessonCard(
-          number: '1.',
-          title: 'Charging & Pairing Wand',
-          subtitle: 'Fast BLE pairing in the garden yard',
-          duration: '30s',
-          icon: Icons.usb,
-          isCompleted: true,
-          onTap: _openStoryLessonModal,
-        ),
-        const SizedBox(height: 8),
-
-        // Lesson 2
-        _buildLessonCard(
-          number: '2.',
-          title: 'Using Wand in Soil',
-          subtitle: '5cm root insertion depth & probe safety',
-          duration: '45s',
-          icon: Icons.water_drop,
-          isCompleted: true,
-          onTap: _openStoryLessonModal,
-        ),
-        const SizedBox(height: 8),
-
-        // Lesson 3: Spotlight
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainer,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.photo_camera, color: AppColors.secondaryFixed, size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                '3. Taking a Good Leaf Photo',
-                                style: AppTypography.headlineSmall.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondaryFixed,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Active',
-                                  style: AppTypography.labelUi.copyWith(
-                                    color: AppColors.onSecondaryFixedVariant,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'Fill frame & prevent sun washing',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '45s',
-                    style: AppTypography.telemetrySmall.copyWith(
-                      color: AppColors.secondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
+        ..._kAllLessons.map((lesson) {
+          final p = progressMap[lesson.id];
+          final isCompleted = p?.isCompleted ?? false;
+          final step = (p == null || p.lastStep == 0) ? 1 : p.lastStep;
+          final total = p?.totalSteps ?? lesson.totalSteps;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: _buildLessonCard(
+              number: '${lesson.number}.',
+              title: lesson.title,
+              subtitle: lesson.subtitle,
+              duration: lesson.duration,
+              icon: lesson.icon,
+              isCompleted: isCompleted,
+              onTap: () => _openStoryLessonModal(
+                lessonId: lesson.id,
+                lessonNumber: lesson.number,
+                currentStep: step,
+                totalSteps: total,
+                lessonTitle: lesson.storyTitle,
+                goodTip: lesson.goodTip,
+                poorTip: lesson.poorTip,
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check, size: 14, color: AppColors.secondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Sharp focus',
-                            style: AppTypography.bodySmall.copyWith(fontSize: 10, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.close, size: 14, color: AppColors.error),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Sun flare',
-                            style: AppTypography.bodySmall.copyWith(fontSize: 10, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Lesson 4
-        _buildLessonCard(
-          number: '4.',
-          title: 'Reading Your Result',
-          subtitle: 'Too Low, Good, & Outbreak zones',
-          duration: '60s',
-          icon: Icons.speed,
-          isCompleted: false,
-          onTap: _openStoryLessonModal,
-        ),
-        const SizedBox(height: 8),
-
-        // Lesson 5
-        _buildLessonCard(
-          number: '5.',
-          title: 'Water & Sun for 3 Crops',
-          subtitle: 'Tomato, Potato & Corn optimal lux',
-          duration: '60s',
-          icon: Icons.wb_sunny,
-          isCompleted: false,
-          onTap: _openStoryLessonModal,
-        ),
-        const SizedBox(height: 8),
-
-        // Lesson 6
-        _buildLessonCard(
-          number: '6.',
-          title: 'Safe Garden Treatments',
-          subtitle: 'Neem oil, baking soda & dilution',
-          duration: '45s',
-          icon: Icons.sanitizer,
-          isCompleted: false,
-          onTap: _openStoryLessonModal,
-        ),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -775,50 +781,54 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: AppColors.secondary, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: AppColors.secondary, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
                           '$number $title',
                           style: AppTypography.headlineSmall.copyWith(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                             color: AppColors.onSurface,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (isCompleted) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.check_circle, size: 14, color: AppColors.secondary),
-                        ],
-                      ],
-                    ),
-                    Text(
-                      subtitle,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                        fontSize: 11,
                       ),
+                      if (isCompleted) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.check_circle, size: 14, color: AppColors.secondary),
+                      ],
+                    ],
+                  ),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 11,
                     ),
-                  ],
-                ),
-              ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             Text(
               duration,
               style: AppTypography.telemetrySmall.copyWith(
@@ -837,16 +847,20 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Crop Diagnostics Atlas',
-              style: AppTypography.headlineSmall.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: AppColors.onSurface,
+            Expanded(
+              child: Text(
+                'Crop Diagnostics Atlas',
+                style: AppTypography.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             Text(
               '12 offline conditions',
               style: AppTypography.bodySmall.copyWith(
@@ -867,65 +881,73 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
               const SizedBox(width: 6),
               _buildCropFilterBtn('Tomato', '🍅 Tomato'),
               const SizedBox(width: 6),
-              _buildCropFilterBtn('Potato', '🥔 Potato'),
+              _buildCropFilterBtn('Chili', '🌶️ Chili'),
               const SizedBox(width: 6),
-              _buildCropFilterBtn('Corn', '🌽 Corn'),
+              _buildCropFilterBtn('Eggplant', '🍆 Eggplant'),
             ],
           ),
         ),
 
         const SizedBox(height: 12),
 
-        // Problem 1: Tomato Early Blight
-        _buildProblemAtlasCard(
-          title: 'Tomato Early Blight',
-          pathogen: 'Alternaria solani',
-          crop: 'Tomato',
-          severityTag: 'HIGH SEVERITY',
-          tagBg: AppColors.tertiaryFixed,
-          tagColor: AppColors.onTertiaryFixed,
-          description: 'Concentric brown rings on lower leaves caused by wet soil splash during heavy watering.',
-          recipeLabel: 'Neem / Soda safe',
-        ),
-        const SizedBox(height: 10),
+        if (_selectedProblemCrop == 'All' || _selectedProblemCrop == 'Tomato') ...[
+          // Problem 1: Tomato Early Blight
+          _buildProblemAtlasCard(
+            title: 'Tomato Early Blight',
+            pathogen: 'Alternaria solani',
+            crop: 'Tomato',
+            severityTag: 'HIGH SEVERITY',
+            tagBg: AppColors.tertiaryFixed,
+            tagColor: AppColors.onTertiaryFixed,
+            description: 'Concentric dark rings on lower leaves from soil splash. Prune lowest 15cm foliage and apply mulch.',
+            recipeLabel: 'Neem (dusk) / 15cm prune',
+          ),
+          const SizedBox(height: 10),
+        ],
 
-        // Problem 2: Potato Late Blight
-        _buildProblemAtlasCard(
-          title: 'Potato Late Blight',
-          pathogen: 'Phytophthora infestans',
-          crop: 'Potato',
-          severityTag: 'URGENT OUTBREAK',
-          tagBg: AppColors.errorContainer,
-          tagColor: AppColors.onErrorContainer,
-          description: 'Rapidly expanding dark brown lesions with pale margins. Spreads fast during humid, cool mornings.',
-          recipeLabel: 'Isolate immediately',
-        ),
-        const SizedBox(height: 10),
+        if (_selectedProblemCrop == 'All' || _selectedProblemCrop == 'Chili') ...[
+          // Problem 2: Chili Anthracnose
+          _buildProblemAtlasCard(
+            title: 'Chili Anthracnose',
+            pathogen: 'Colletotrichum capsici',
+            crop: 'Chili',
+            severityTag: 'HIGH SEVERITY',
+            tagBg: AppColors.tertiaryFixed,
+            tagColor: AppColors.onTertiaryFixed,
+            description: 'Circular sunken lesions with spore rings aggravated by wet foliage. Apply bicarb in early morning.',
+            recipeLabel: 'Bicarb (morning) / Airflow',
+          ),
+          const SizedBox(height: 10),
+        ],
 
-        // Problem 3: Corn Common Rust
-        _buildProblemAtlasCard(
-          title: 'Corn Common Rust',
-          pathogen: 'Puccinia sorghi',
-          crop: 'Corn',
-          severityTag: 'MODERATE',
-          tagBg: AppColors.surfaceContainerHighest,
-          tagColor: AppColors.onSurface,
-          description: 'Cinnamon-colored pustules that erupt on both surfaces of corn leaves, reducing overall plant vigor.',
-          recipeLabel: 'Manageable airflow',
-        ),
-        const SizedBox(height: 10),
+        if (_selectedProblemCrop == 'All' || _selectedProblemCrop == 'Eggplant') ...[
+          // Problem 3: Eggplant Phomopsis Blight
+          _buildProblemAtlasCard(
+            title: 'Eggplant Phomopsis Blight',
+            pathogen: 'Phomopsis vexans',
+            crop: 'Eggplant',
+            severityTag: 'URGENT OUTBREAK',
+            tagBg: AppColors.errorContainer,
+            tagColor: AppColors.onErrorContainer,
+            description: 'Discolored brownish leaf spots with pycnidia dots. Space containers for airflow and mulch 3cm.',
+            recipeLabel: 'Isolate container & 3cm mulch',
+          ),
+          const SizedBox(height: 10),
+        ],
 
-        // Problem 4: Blossom End Rot
-        _buildProblemAtlasCard(
-          title: 'Blossom End Rot',
-          pathogen: 'Calcium & Moisture Swings',
-          crop: 'Tomato',
-          severityTag: 'ENVIRONMENTAL',
-          tagBg: AppColors.secondaryFixed,
-          tagColor: AppColors.onSecondaryFixed,
-          description: 'Sunken leathery patch on tomato bottom caused by uneven watering and low root calcium uptake.',
-          recipeLabel: 'Watering calibration',
-        ),
+        if (_selectedProblemCrop == 'All' || _selectedProblemCrop == 'Tomato') ...[
+          // Problem 4: Blossom End Rot
+          _buildProblemAtlasCard(
+            title: 'Blossom End Rot',
+            pathogen: 'Calcium & Moisture Swings',
+            crop: 'Tomato',
+            severityTag: 'ENVIRONMENTAL',
+            tagBg: AppColors.secondaryFixed,
+            tagColor: AppColors.onSecondaryFixed,
+            description: 'Sunken leathery patch on tomato bottom caused by uneven watering and root hypoxia. Not fungal.',
+            recipeLabel: 'Stabilize 25-35% VWC',
+          ),
+        ],
       ],
     );
   }
@@ -973,65 +995,71 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: tagBg,
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Text(
-                          severityTag,
-                          style: AppTypography.labelUi.copyWith(
-                            color: tagColor,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: tagBg,
+                            borderRadius: BorderRadius.circular(9999),
+                          ),
+                          child: Text(
+                            severityTag,
+                            style: AppTypography.labelUi.copyWith(
+                              color: tagColor,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        crop.toUpperCase(),
-                        style: AppTypography.labelUi.copyWith(
-                          color: AppColors.outline,
-                          fontSize: 9,
+                        const SizedBox(width: 6),
+                        Text(
+                          crop.toUpperCase(),
+                          style: AppTypography.labelUi.copyWith(
+                            color: AppColors.outline,
+                            fontSize: 9,
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      style: AppTypography.headlineSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.onSurface,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    title,
-                    style: AppTypography.headlineSmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: AppColors.onSurface,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    pathogen,
-                    style: AppTypography.bodySmall.copyWith(
-                      fontStyle: FontStyle.italic,
-                      fontSize: 11,
-                      color: AppColors.onSurfaceVariant,
+                    Text(
+                      pathogen,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 11,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: AppColors.surfaceContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.biotech, color: AppColors.secondary, size: 24),
+                child: const Icon(Icons.biotech, color: AppColors.secondary, size: 22),
               ),
             ],
           ),
@@ -1045,22 +1073,29 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
           ),
           const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.eco, size: 14, color: AppColors.secondary),
-                  const SizedBox(width: 4),
-                  Text(
-                    recipeLabel,
-                    style: AppTypography.labelUi.copyWith(
-                      color: AppColors.secondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.eco, size: 14, color: AppColors.secondary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        recipeLabel,
+                        style: AppTypography.labelUi.copyWith(
+                          color: AppColors.secondary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               InkWell(
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1071,6 +1106,7 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
                   );
                 },
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'TREATMENT RECIPE',
@@ -1094,30 +1130,36 @@ class _LearnScreenState extends ConsumerState<LearnScreen> {
 
   Widget _buildGlossaryTab() {
     final terms = [
-      {'term': 'Abiotic Stress', 'meaning': 'Non-living stressors such as drought, extreme heat, or soil compaction.'},
-      {'term': 'Blight (Alternaria)', 'meaning': 'Fungal infection causing circular brown spots with yellow chlorotic halos.'},
-      {'term': 'Chlorosis (Paninilaw)', 'meaning': 'Yellowing of leaf tissue due to lack of chlorophyll, often from waterlogging.'},
-      {'term': 'Inference Latency', 'meaning': 'Time taken by local on-device AI (e.g. 42ms) to identify pathogen spots.'},
-      {'term': 'Solanaceae (Nightshades)', 'meaning': 'Plant family including tomato, red chili, eggplant, and potato.'},
-      {'term': 'VWC (Volumetric Water)', 'meaning': 'Percentage of water volume in soil substrate measured by the FloraWand.'},
+      {'term': 'Abiotic Stress', 'meaning': 'Non-living stressors such as drought, heatwaves, or soil waterlogging vs living pathogens.'},
+      {'term': 'Blight (Alternaria)', 'meaning': 'Fungal infection causing circular brown rings with yellow chlorotic halos on lower foliage.'},
+      {'term': 'Chlorosis', 'meaning': 'Yellowing of leaf tissue from root hypoxia, nutrient starvation, or fungal infection.'},
+      {'term': 'Inference Latency', 'meaning': 'Time taken by local on-device ONNX AI (42ms) to identify diseases without an internet connection.'},
+      {'term': 'Overwatering Triage', 'meaning': 'Empty drip saucer immediately; if soil remains soggy, amend potting mix with 20–30% perlite.'},
+      {'term': 'Solanaceae (Nightshades)', 'meaning': 'Plant family including sweet plum tomato, red habanero chili, and black beauty eggplant.'},
+      {'term': 'Spray Timing', 'meaning': 'Apply neem oil at dusk to protect pollinators and prevent sun scorch; apply bicarb in early morning.'},
+      {'term': 'VWC (Volumetric Water)', 'meaning': 'Percentage of root-zone water volume measured 5cm deep by the FloraWand (25–35% is ideal).'},
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              "Gardener's Glossary",
-              style: AppTypography.headlineSmall.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: AppColors.onSurface,
+            Expanded(
+              child: Text(
+                "Gardener's Glossary",
+                style: AppTypography.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             Text(
-              '18 Terms • English + Tagalog',
+              '18 Terms • English',
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.onSurfaceVariant,
                 fontSize: 11,

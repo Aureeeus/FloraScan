@@ -21,7 +21,8 @@ void main() {
 
     // Assert (AAA Pattern adhering to Software Engineer standards)
     expect(find.text('FloraScan'), findsOneWidget);
-    expect(find.text('Magandang araw, Plantito!'), findsOneWidget);
+    expect(find.text('Good morning!'), findsOneWidget);
+    expect(find.text("Let's check your plants."), findsOneWidget);
     expect(find.text('FloraWand Connected'), findsOneWidget);
     expect(find.text('Soil Moist.'), findsOneWidget);
     expect(find.text('Plants That Need Attention'), findsOneWidget);

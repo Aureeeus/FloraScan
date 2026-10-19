@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/sproutly_mascot.dart';
+import '../../../core/ble/flora_wand_ble_service.dart';
 import '../domain/entities/plant_model.dart';
 import 'providers/plant_providers.dart';
 
@@ -20,12 +21,21 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _selectedCrop = 'tomato';
-  final _nicknameController = TextEditingController(text: 'Tomato - Plot A1');
-  final _dateController = TextEditingController(text: 'Today, October 24, 2024');
+  late final TextEditingController _nicknameController;
+  late final TextEditingController _dateController;
   String _selectedGrowthStage = 'vegetative';
   String _selectedLocation = 'balcony';
   String _selectedContainer = 'earthen';
   bool _isWandPaired = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _nicknameController = TextEditingController();
+    final now = DateTime.now();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    _dateController = TextEditingController(text: 'Today, ${months[now.month - 1]} ${now.day}, ${now.year}');
+  }
 
   @override
   void dispose() {
@@ -56,9 +66,9 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
         _ => CropGrowthStage.vegetative,
       },
       healthStatus: PlantHealthStatus.healthy,
-      soilMoisturePercent: 64.0,
-      soilTemperatureCelsius: 26.0,
-      npkSummary: 'N:160 P:55 K:190 ppm',
+      soilMoisturePercent: _isWandPaired ? ref.read(floraWandNotifierProvider).telemetry.soilMoisturePercent : 0.0,
+      soilTemperatureCelsius: _isWandPaired ? ref.read(floraWandNotifierProvider).telemetry.temperatureCelsius : 0.0,
+      npkSummary: _isWandPaired ? 'Initial calibration: ${ref.read(floraWandNotifierProvider).telemetry.soilMoistureTag}' : 'Pending probe scan',
       lastScannedAt: DateTime.now(),
       primaryDiagnosis: 'Baseline registered - Healthy',
       notes: 'Growing in $_selectedLocation using $_selectedContainer container.',
@@ -79,7 +89,7 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(64),
         child: Container(
@@ -122,21 +132,6 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
                       ],
                     ),
                   ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainer,
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
-                  child: Text(
-                    'EN',
-                    style: AppTypography.labelUi.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -465,6 +460,7 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
                         controller: _nicknameController,
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.label, size: 18, color: AppColors.secondary),
+                          hintText: 'e.g., Cherry Tomato - Balcony',
                           filled: true,
                           fillColor: AppColors.surfaceContainer,
                           border: OutlineInputBorder(
@@ -665,13 +661,13 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.secondary,
+                              color: _isWandPaired ? AppColors.secondary : AppColors.surfaceContainerHigh,
                               borderRadius: BorderRadius.circular(9999),
                             ),
                             child: Text(
-                              'BLE Active',
+                              _isWandPaired ? 'BLE Active' : 'Standby',
                               style: AppTypography.labelUi.copyWith(
-                                color: AppColors.secondaryFixed,
+                                color: _isWandPaired ? AppColors.secondaryFixed : AppColors.onSurfaceVariant,
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -699,13 +695,17 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.sensors, color: AppColors.secondaryFixed, size: 22),
+                                Icon(
+                                  Icons.sensors,
+                                  color: _isWandPaired ? AppColors.secondaryFixed : Colors.white38,
+                                  size: 22,
+                                ),
                                 const SizedBox(width: 8),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'IoT Wand #FS-0882',
+                                      _isWandPaired ? 'FloraScan IoT Wand' : 'Probe Disconnected',
                                       style: AppTypography.headlineSmall.copyWith(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700,
@@ -713,10 +713,12 @@ class _AddPlantScreenState extends ConsumerState<AddPlantScreen> {
                                       ),
                                     ),
                                     Text(
-                                      'Signal: Strong (-42 dBm) • Bat: 94%',
+                                      _isWandPaired
+                                          ? 'BLE Connected • Telemetry Synced'
+                                          : 'Toggle to pair Bluetooth hardware probe',
                                       style: AppTypography.telemetrySmall.copyWith(
                                         fontSize: 10,
-                                        color: AppColors.secondaryFixed,
+                                        color: _isWandPaired ? AppColors.secondaryFixed : Colors.white60,
                                       ),
                                     ),
                                   ],
