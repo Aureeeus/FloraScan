@@ -17,6 +17,12 @@ desktop.ini
 *.class
 *.log
 *.swp
+*.swo
+*.tmp
+*.bak
+*.orig
+*.rej
+*~
 .history
 .atom/
 .build/
@@ -44,8 +50,11 @@ migrate_working_dir/
 *.key
 *.p12
 key.properties
+**/key.properties
 *.keystore
 *.jks
+**/local.properties
+local.properties
 
 # ==============================================================================
 # FLUTTER / DART (MOBILE CLIENT)
@@ -59,13 +68,40 @@ key.properties
 **/build/
 **/coverage/
 **/doc/api/
-**/ios/Flutter/.last_build_id
+**/devtools_options.yaml
+
+# Android Native Artifacts & Generated Registrants
+**/.gradle/
+**/.cxx/
+**/.externalNativeBuild/
+**/captures/
 mobile/android/app/debug/
 mobile/android/app/profile/
 mobile/android/app/release/
 app.*.symbols
 app.*.map.json
-**/devtools_options.yaml
+**/GeneratedPluginRegistrant.java
+
+# iOS Ephemeral & Generated Native Artifacts
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/DerivedData/
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/xcuserdata/
+
+# Local SQLite & Temporary Databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Mobile Application Packages
 *.apk
@@ -91,6 +127,11 @@ ml/env/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
+coverage.xml
+nosetests.xml
+.tox/
+.nox/
 htmlcov/
 **/.ipynb_checkpoints/
 
