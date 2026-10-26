@@ -1,10 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/ble/flora_wand_ble_service.dart';
 import '../../../../core/database/app_database.dart';
+import '../../../home/presentation/providers/telemetry_providers.dart';
+import '../../../plants/presentation/providers/plant_providers.dart';
 import '../../data/repositories/local_learn_repository.dart';
 import '../../domain/entities/agronomy_article_model.dart';
+import '../../domain/entities/atlas_condition_model.dart';
+import '../../domain/entities/glossary_term_model.dart';
+import '../../domain/entities/lesson_definition.dart';
 import '../../domain/entities/lesson_progress.dart';
 import '../../domain/repositories/learn_repository.dart';
+import '../../domain/services/learn_context_greeting_service.dart';
 
 /// Dependency injection provider for [LearnRepository].
 ///
@@ -18,6 +25,24 @@ final learnRepositoryProvider = Provider<LearnRepository>((ref) {
 final agronomyArticlesProvider = FutureProvider<List<AgronomyArticle>>((ref) {
   final repository = ref.watch(learnRepositoryProvider);
   return repository.fetchAllArticles();
+});
+
+/// Reactive provider delivering all interactive micro-lessons.
+final lessonsProvider = FutureProvider<List<LessonDefinition>>((ref) {
+  final repository = ref.watch(learnRepositoryProvider);
+  return repository.fetchLessons();
+});
+
+/// Reactive provider delivering all diagnostic atlas conditions.
+final atlasConditionsProvider = FutureProvider<List<AtlasCondition>>((ref) {
+  final repository = ref.watch(learnRepositoryProvider);
+  return repository.fetchAtlasConditions();
+});
+
+/// Reactive provider delivering all agricultural dictionary glossary terms.
+final glossaryTermsProvider = FutureProvider<List<GlossaryTerm>>((ref) {
+  final repository = ref.watch(learnRepositoryProvider);
+  return repository.fetchGlossaryTerms();
 });
 
 /// Reactive notifier managing user learning progress across interactive lessons.
@@ -77,3 +102,22 @@ final lessonProgressNotifierProvider =
     AsyncNotifierProvider<LessonProgressNotifier, Map<String, LessonProgress>>(
   LessonProgressNotifier.new,
 );
+
+/// Provider delivering the context-aware agronomic greeting.
+///
+/// Reactively evaluates current solar time, FloraWand BLE live telemetry,
+/// registered plant health alerts, and curriculum milestones.
+final learnContextGreetingProvider = Provider<LearnContextGreeting>((ref) {
+  final telemetryAsync = ref.watch(liveTelemetryProvider);
+  final plantsAsync = ref.watch(plantListNotifierProvider);
+  final progressAsync = ref.watch(lessonProgressNotifierProvider);
+  final wandState = ref.watch(floraWandNotifierProvider);
+
+  return resolveLearnContextGreeting(
+    currentTime: DateTime.now(),
+    telemetry: telemetryAsync.value,
+    plants: plantsAsync.value,
+    progressMap: progressAsync.value,
+    isWandConnected: wandState.isConnected,
+  );
+});

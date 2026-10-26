@@ -26,13 +26,16 @@ class ArticleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final agriColors = context.agriTheme;
 
     final categoryColor = switch (article.category) {
-      AgronomyCategory.pathology => agriColors.severeOutbreak,
-      AgronomyCategory.soilNutrition => agriColors.richOchreSoil,
-      AgronomyCategory.prevention => agriColors.healthyVigor,
-      AgronomyCategory.irrigation => agriColors.moistureCyan,
+      AgronomyCategory.pathology => isDark ? colorScheme.error : agriColors.severeOutbreak,
+      AgronomyCategory.soilNutrition => isDark ? colorScheme.tertiary : agriColors.richOchreSoil,
+      AgronomyCategory.prevention => isDark ? colorScheme.secondary : agriColors.healthyVigor,
+      AgronomyCategory.irrigation => isDark ? colorScheme.primary : agriColors.moistureCyan,
     };
 
     return InkWell(
@@ -42,16 +45,23 @@ class ArticleCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
+          color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.outlineVariant, width: 1),
-          boxShadow: const [
-            BoxShadow(
-              color: Color.fromRGBO(15, 23, 42, 0.04),
-              blurRadius: 4,
-              offset: Offset(0, 1),
-            ),
-          ],
+          border: Border.all(
+            color: isDark
+                ? colorScheme.outlineVariant.withValues(alpha: 0.25)
+                : AppColors.outlineVariant,
+            width: 1,
+          ),
+          boxShadow: isDark
+              ? const []
+              : const [
+                  BoxShadow(
+                    color: Color.fromRGBO(15, 23, 42, 0.04),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,8 +72,11 @@ class ArticleCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: categoryColor.withValues(alpha: 0.1),
+                    color: categoryColor.withValues(alpha: isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(4),
+                    border: isDark
+                        ? Border.all(color: categoryColor.withValues(alpha: 0.3))
+                        : null,
                   ),
                   child: Text(
                     _formatCategory(article.category).toUpperCase(),
@@ -77,7 +90,7 @@ class ArticleCard extends StatelessWidget {
                 Text(
                   '${article.readTimeMinutes} min read',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                     fontSize: 11,
                   ),
                 ),
@@ -87,7 +100,7 @@ class ArticleCard extends StatelessWidget {
             Text(
               article.title,
               style: AppTypography.headlineSmall.copyWith(
-                color: AppColors.onSurface,
+                color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
@@ -96,7 +109,7 @@ class ArticleCard extends StatelessWidget {
             Text(
               article.summary,
               style: AppTypography.bodySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                 height: 1.4,
               ),
               maxLines: 2,
@@ -105,12 +118,16 @@ class ArticleCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.spa_outlined, size: 14, color: AppColors.secondary),
+                Icon(
+                  Icons.spa_outlined,
+                  size: 14,
+                  color: isDark ? colorScheme.secondary : AppColors.secondary,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   article.targetCrop,
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.secondary,
+                    color: isDark ? colorScheme.secondary : AppColors.secondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -118,7 +135,7 @@ class ArticleCard extends StatelessWidget {
                 Text(
                   'Read Protocol →',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.primary,
+                    color: isDark ? colorScheme.primary : AppColors.primary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
