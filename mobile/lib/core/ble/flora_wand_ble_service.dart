@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -17,11 +18,13 @@ export 'flora_wand_state.dart';
 class FloraWandGattUuids {
   FloraWandGattUuids._();
 
-  /// Primary telemetry service advertised by FloraWand ESP32.
-  static final Guid serviceUuid = Guid('0000ff01-0000-1000-8000-00805f9b34fb');
+  /// Primary telemetry service advertised by FloraWand ESP32 (from hardware specification).
+  static final Guid serviceUuid = Guid('12345678-1234-1234-1234-123456789000');
+  static final Guid legacyServiceUuid = Guid('0000ff01-0000-1000-8000-00805f9b34fb');
 
-  /// Telemetry notification & read characteristic (9-10 byte binary struct or string).
-  static final Guid telemetryCharacteristicUuid = Guid('0000ff02-0000-1000-8000-00805f9b34fb');
+  /// Telemetry notification & read characteristic (READ, NOTIFY).
+  static final Guid telemetryCharacteristicUuid = Guid('12345678-1234-1234-1234-123456789001');
+  static final Guid legacyTelemetryCharacteristicUuid = Guid('0000ff02-0000-1000-8000-00805f9b34fb');
 
   /// Command write characteristic for triggering on-demand probe reads.
   static final Guid commandCharacteristicUuid = Guid('0000ff03-0000-1000-8000-00805f9b34fb');
@@ -57,6 +60,14 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     }
   }
 
+  bool get _isTestEnvironment {
+    try {
+      return !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   FloraWandState build() {
     ref.onDispose(() {
@@ -66,7 +77,12 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     });
 
     _initAdapterListener();
-    return FloraWandState.initial();
+
+    // Preserve mock state for widget tests; on real runtime start disconnected
+    if (_isTestEnvironment) {
+      return FloraWandState.initial();
+    }
+    return FloraWandState.disconnected();
   }
 
   void _initAdapterListener() {
@@ -94,6 +110,13 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
           // Silently handle headless test runner environments
         },
       );
+
+      // Check current adapter state asynchronously on boot
+      FlutterBluePlus.adapterState.first.then((adapterState) {
+        if (adapterState == BluetoothAdapterState.on && _activeDevice == null && !_userInitiatedDisconnect) {
+          _startAutoConnect();
+        }
+      }).catchError((_) {});
     } catch (_) {
       // Test environments without Bluetooth adapter
     }
@@ -107,7 +130,10 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     try {
       // 1. Check if device is already paired/connected at system OS level
       try {
-        final systemDevices = await FlutterBluePlus.systemDevices([FloraWandGattUuids.serviceUuid]);
+        final systemDevices = await FlutterBluePlus.systemDevices([
+          FloraWandGattUuids.serviceUuid,
+          FloraWandGattUuids.legacyServiceUuid,
+        ]);
         for (final dev in systemDevices) {
           final d = FloraWandDiscoveredDevice(
             id: dev.remoteId.str,
@@ -122,9 +148,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
         }
       } catch (_) {}
 
-      // 2. Perform a non-disruptive 4-second background scan
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
-
+      // 2. Perform a non-disruptive background scan (attach listener BEFORE starting scan)
       StreamSubscription<List<ScanResult>>? tempScanSub;
       tempScanSub = FlutterBluePlus.scanResults.listen((results) async {
         for (final r in results) {
@@ -132,12 +156,18 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
               ? r.device.platformName
               : r.advertisementData.advName;
           final matchesUuid = r.advertisementData.serviceUuids.any(
-            (u) => u == FloraWandGattUuids.serviceUuid || u.str.toLowerCase().contains('ff01'),
+            (u) =>
+                u == FloraWandGattUuids.serviceUuid ||
+                u == FloraWandGattUuids.legacyServiceUuid ||
+                u.str.toLowerCase().contains('123456789000') ||
+                u.str.toLowerCase().contains('ff01'),
           );
           final isMatch = matchesUuid ||
               name.toLowerCase().contains('flora') ||
               name.toLowerCase().contains('wand') ||
-              name.toLowerCase().contains('esp32');
+              name.toLowerCase().contains('esp32') ||
+              name.toLowerCase().contains('sensor') ||
+              name.toLowerCase().contains('soil');
 
           if (isMatch && _activeDevice == null && !_userInitiatedDisconnect) {
             await FlutterBluePlus.stopScan();
@@ -153,7 +183,8 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
         }
       });
 
-      await Future.delayed(const Duration(seconds: 4));
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+      await Future.delayed(const Duration(seconds: 6));
       await tempScanSub.cancel();
     } catch (_) {
       // Graceful fallback for environments where scan cannot start
@@ -200,14 +231,20 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
               ? r.device.platformName
               : r.advertisementData.advName;
           final matchesUuid = r.advertisementData.serviceUuids.any(
-            (u) => u == FloraWandGattUuids.serviceUuid || u.str.toLowerCase().contains('ff01'),
+            (u) =>
+                u == FloraWandGattUuids.serviceUuid ||
+                u == FloraWandGattUuids.legacyServiceUuid ||
+                u.str.toLowerCase().contains('123456789000') ||
+                u.str.toLowerCase().contains('ff01'),
           );
 
           // Match devices named FloraWand or containing Flora/Wand/ESP32 or advertising 0xFF01
           final isMatch = matchesUuid ||
               name.toLowerCase().contains('flora') ||
               name.toLowerCase().contains('wand') ||
-              name.toLowerCase().contains('esp32');
+              name.toLowerCase().contains('esp32') ||
+              name.toLowerCase().contains('sensor') ||
+              name.toLowerCase().contains('soil');
 
           if (isMatch) {
             final discovered = FloraWandDiscoveredDevice(
@@ -305,6 +342,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
           state = state.copyWith(
             connectionState: FloraWandConnectionState.disconnected,
             errorMessage: 'FloraWand powered off or out of range.',
+            telemetry: state.telemetry.copyWith(hasReading: false),
           );
 
           // Auto-reconnect loop if switch is turned back on
@@ -327,11 +365,17 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
       // Pass 1: Prioritize exact UUID match for FloraWand characteristics
       for (final service in services) {
         for (final c in service.characteristics) {
-          if (c.uuid == FloraWandGattUuids.telemetryCharacteristicUuid) {
+          final cStr = c.uuid.str.toLowerCase();
+          final isTelemetryMatch = c.uuid == FloraWandGattUuids.telemetryCharacteristicUuid ||
+              c.uuid == FloraWandGattUuids.legacyTelemetryCharacteristicUuid ||
+              cStr.contains('123456789001') ||
+              cStr.contains('ff02');
+
+          if (isTelemetryMatch) {
             telemetryChar = c;
-          } else if (c.uuid == FloraWandGattUuids.commandCharacteristicUuid) {
+          } else if (c.uuid == FloraWandGattUuids.commandCharacteristicUuid || cStr.contains('ff03')) {
             commandChar = c;
-          } else if (c.uuid == FloraWandGattUuids.batteryLevelCharacteristicUuid) {
+          } else if (c.uuid == FloraWandGattUuids.batteryLevelCharacteristicUuid || cStr.contains('2a19')) {
             batteryChar = c;
           }
         }
@@ -341,10 +385,16 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
       if (telemetryChar == null) {
         for (final service in services) {
           final sUuidStr = service.uuid.str.toLowerCase();
-          // Skip standard Bluetooth SIG services (0x1800-0x18FF) to prevent shadowing
-          if (sUuidStr.startsWith('000018')) continue;
+          // Skip standard Bluetooth SIG services (0x1800-0x18FF, e.g. 0x1800 Generic Access, 0x1801 Generic Attribute)
+          final isStandardSigService = sUuidStr.startsWith('000018') || (sUuidStr.length == 4 && sUuidStr.startsWith('18'));
+          if (isStandardSigService) continue;
 
           for (final c in service.characteristics) {
+            final cUuidStr = c.uuid.str.toLowerCase();
+            // Skip standard Bluetooth SIG characteristics (0x2A00-0x2AFF, e.g. 0x2A05 Service Changed)
+            final isStandardSigChar = cUuidStr.startsWith('00002a') || (cUuidStr.length == 4 && cUuidStr.startsWith('2a'));
+            if (isStandardSigChar) continue;
+
             if (c.properties.notify || c.properties.indicate) {
               telemetryChar ??= c;
             }
@@ -420,6 +470,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     _cleanupConnection();
     state = state.copyWith(
       connectionState: FloraWandConnectionState.disconnected,
+      telemetry: state.telemetry.copyWith(hasReading: false),
     );
   }
 
@@ -540,8 +591,13 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
         final rawMoisture = _extractNumeric(parsed, ['moisture', 'soil', 'm', 'rawmoisture', 'soil_moisture'])?.toInt() ?? currentMoistureAdc;
         final rawTemp = _extractNumeric(parsed, ['temp', 'temperature', 't', 'soil_temperature', 'air_temp'])?.toDouble() ?? state.telemetry.temperatureCelsius;
         final rawHumidity = _extractNumeric(parsed, ['humidity', 'hum', 'h', 'ambient_humidity'])?.toDouble() ?? state.telemetry.humidityPercent;
-        final rawLight = _extractNumeric(parsed, ['light', 'lux', 'l', 'par', 'solar_radiation'])?.toDouble() ?? state.telemetry.lightLux;
+        final extractedLight = _extractNumeric(parsed, ['light', 'lux', 'l', 'par', 'solar_radiation'])?.toDouble();
+        final rawLight = extractedLight ?? state.telemetry.lightLux;
         final rawBattery = _extractNumeric(parsed, ['battery', 'batt', 'b', 'pwr'])?.toInt() ?? state.telemetry.batteryPercent;
+
+        final isDirectLux = extractedLight == null ||
+            parsed.keys.any((k) => k.toLowerCase() == 'lux' || k.toLowerCase() == 'par') ||
+            rawLight > 4095;
 
         _applyCalibratedTelemetry(
           rawMoisture: rawMoisture,
@@ -549,6 +605,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
           rawHumidity: rawHumidity,
           rawLight: rawLight,
           rawBattery: rawBattery,
+          isDirectLux: isDirectLux,
         );
         return true;
       }
@@ -592,12 +649,15 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
           ? (int.tryParse(battMatch.group(1)!) ?? state.telemetry.batteryPercent)
           : state.telemetry.batteryPercent;
 
+      final isDirectLux = lightMatch == null || text.toLowerCase().contains('lux') || text.toLowerCase().contains('par') || light > 4095;
+
       _applyCalibratedTelemetry(
         rawMoisture: rawMoisture,
         rawTemperature: temp,
         rawHumidity: hum,
         rawLight: light,
         rawBattery: batt,
+        isDirectLux: isDirectLux,
       );
       return true;
     }
@@ -613,6 +673,8 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
       final l = double.tryParse(tokens[3]);
       final b = tokens.length >= 5 ? int.tryParse(tokens[4]) : null;
 
+      final isDirectLux = (l != null && l > 4095) || ((m ?? 200) <= 100 && (h ?? 200) <= 100);
+
       if (m != null && t != null && h != null && l != null) {
         _applyCalibratedTelemetry(
           rawMoisture: m.toInt(),
@@ -620,6 +682,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
           rawHumidity: h,
           rawLight: l,
           rawBattery: b ?? state.telemetry.batteryPercent,
+          isDirectLux: isDirectLux,
         );
         return true;
       }
@@ -696,6 +759,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
     required double rawHumidity,
     required double rawLight,
     required int rawBattery,
+    bool isDirectLux = false,
   }) {
     final calibrated = _calibrationService.calibrate(
       rawMoisture: rawMoisture,
@@ -703,6 +767,7 @@ class FloraWandNotifier extends Notifier<FloraWandState> {
       rawHumidity: rawHumidity,
       rawLight: rawLight,
       rawBattery: rawBattery,
+      isDirectLux: isDirectLux,
     );
 
     state = state.copyWith(

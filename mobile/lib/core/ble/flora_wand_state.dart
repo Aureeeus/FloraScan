@@ -61,7 +61,7 @@ class FloraWandState {
   String get statusLabel {
     switch (connectionState) {
       case FloraWandConnectionState.connected:
-        return 'FloraWand Connected';
+        return 'FloraWand Online';
       case FloraWandConnectionState.connecting:
         return 'FloraWand Connecting...';
       case FloraWandConnectionState.scanning:
@@ -108,13 +108,23 @@ class FloraWandState {
   factory FloraWandState.initial() {
     return FloraWandState(
       connectionState: FloraWandConnectionState.connected,
-      telemetry: CalibratedTelemetry.initial(),
+      telemetry: CalibratedTelemetry.initial(hasReading: true),
       connectedDevice: const FloraWandDiscoveredDevice(
         id: 'C4:4F:33:1B:88:40',
         name: 'FloraWand Model S1',
         rssi: -58,
       ),
       lastSampledAt: DateTime.now(),
+    );
+  }
+
+  /// Disconnected initial state for live real-device execution before BLE pairing.
+  factory FloraWandState.disconnected() {
+    return FloraWandState(
+      connectionState: FloraWandConnectionState.disconnected,
+      telemetry: CalibratedTelemetry.initial(hasReading: false),
+      connectedDevice: null,
+      lastSampledAt: null,
     );
   }
 }

@@ -145,27 +145,53 @@ void main() {
     });
 
     test('Evaluates illuminance formatting and tags', () {
-      final bright = calibrationService.calibrate(
+      final directLux = calibrationService.calibrate(
         rawMoisture: 2200,
         rawTemperature: 25.0,
         rawHumidity: 60.0,
         rawLight: 42000.0,
         rawBattery: 80,
+        isDirectLux: true,
       );
-      expect(bright.formattedLight, equals('42.0k Lux'));
-      expect(bright.lightTag, equals('Bright'));
-      expect(bright.isLightWarning, isFalse);
+      expect(directLux.formattedLight, equals('42.0k Lux'));
+      expect(directLux.lightTag, equals('Bright'));
+      expect(directLux.isLightWarning, isFalse);
 
-      final dim = calibrationService.calibrate(
+      final dark = calibrationService.calibrate(
         rawMoisture: 2200,
         rawTemperature: 25.0,
         rawHumidity: 60.0,
-        rawLight: 3950.0,
+        rawLight: 0.0,
         rawBattery: 80,
       );
-      expect(dim.lightLux, closeTo(63.0, 1.0));
-      expect(dim.lightTag, equals('Low Light'));
-      expect(dim.isLightWarning, isTrue);
+      expect(dark.lightLux, equals(0.0));
+      expect(dark.formattedLight, equals('0 Lux'));
+      expect(dark.lightTag, equals('Low Light'));
+      expect(dark.isLightWarning, isTrue);
+
+      final normalRoom = calibrationService.calibrate(
+        rawMoisture: 2200,
+        rawTemperature: 25.0,
+        rawHumidity: 60.0,
+        rawLight: 280.0,
+        rawBattery: 80,
+      );
+      expect(normalRoom.lightLux, closeTo(344.0, 5.0));
+      expect(normalRoom.formattedLight, equals('344 Lux'));
+      expect(normalRoom.lightTag, equals('Normal'));
+      expect(normalRoom.isLightWarning, isFalse);
+
+      final directSun = calibrationService.calibrate(
+        rawMoisture: 2200,
+        rawTemperature: 25.0,
+        rawHumidity: 60.0,
+        rawLight: 3200.0,
+        rawBattery: 80,
+      );
+      expect(directSun.lightLux, closeTo(44249.0, 500.0));
+      expect(directSun.formattedLight, equals('44.2k Lux'));
+      expect(directSun.lightTag, equals('Bright'));
+      expect(directSun.isLightWarning, isFalse);
     });
   });
 
@@ -193,7 +219,7 @@ void main() {
       );
 
       expect(initial.isConnected, isTrue);
-      expect(initial.statusLabel, equals('FloraWand Connected'));
+      expect(initial.statusLabel, equals('FloraWand Online'));
       expect(initial.deviceName, equals('FloraWand Model S1'));
       expect(initial.hardwareId, equals('#FW-8840'));
 
@@ -291,7 +317,7 @@ void main() {
       expect(state.telemetry.soilMoisturePercent, equals(50.0));
       expect(state.telemetry.temperatureCelsius, equals(27.5));
       expect(state.telemetry.humidityPercent, equals(68.0));
-      expect(state.telemetry.lightLux, closeTo(30437.0, 1.0));
+      expect(state.telemetry.lightLux, closeTo(1846.0, 5.0));
       expect(state.telemetry.batteryPercent, equals(91));
     });
 
@@ -386,5 +412,61 @@ void main() {
       expect(reading.temperatureCelsius, equals(calibrated.temperatureCelsius));
       expect(reading.relativeHumidityPct, equals(calibrated.humidityPercent));
     });
+
+    test('CalibratedTelemetry.copyWith preserves unchanged fields and overrides specified ones', () {
+      // Arrange
+      final original = CalibratedTelemetry(
+        soilMoisturePercent: 45.0,
+        temperatureCelsius: 24.0,
+        humidityPercent: 62.0,
+        lightLux: 750.0,
+        batteryPercent: 88,
+        soilMoistureTag: 'Good',
+        temperatureTag: 'Good',
+        humidityTag: 'Good',
+        lightTag: 'Good',
+        isMoistureWarning: false,
+        isTemperatureWarning: false,
+        isHumidityWarning: false,
+        isLightWarning: false,
+        isProbeInserted: true,
+        timestamp: DateTime(2026, 1, 1),
+      );
+
+      // Act
+      final updated = original.copyWith(batteryPercent: 99);
+
+      // Assert
+      expect(updated.batteryPercent, equals(99));
+      expect(updated.soilMoisturePercent, equals(45.0));
+      expect(updated.temperatureCelsius, equals(24.0));
+      expect(updated.humidityPercent, equals(62.0));
+      expect(updated.lightLux, equals(750.0));
+      expect(updated.soilMoistureTag, equals('Good'));
+      expect(updated.isProbeInserted, isTrue);
+    });
+
+    test('Partial JSON telemetry packet updates specified values while preserving existing telemetry', () {
+      // Arrange: Seed initial telemetry
+      const initialPacket = '{"moisture": 1800, "temp": 28.0, "humidity": 70.0, "light": 950, "battery": 90}';
+      final notifier = container.read(floraWandNotifierProvider.notifier);
+      notifier.processRawPayload(utf8.encode(initialPacket));
+
+      var state = container.read(floraWandNotifierProvider);
+      final initialLight = state.telemetry.lightLux;
+      expect(state.telemetry.temperatureCelsius, equals(28.0));
+      expect(state.telemetry.humidityPercent, equals(70.0));
+
+      // Act: Receive partial packet with only temp and humidity
+      const partialPacket = '{"temp": 29.5, "humidity": 72.0}';
+      notifier.processRawPayload(utf8.encode(partialPacket));
+
+      // Assert: moisture and light are preserved, temp and humidity updated
+      state = container.read(floraWandNotifierProvider);
+      expect(state.telemetry.temperatureCelsius, equals(29.5));
+      expect(state.telemetry.humidityPercent, equals(72.0));
+      expect(state.telemetry.lightLux, equals(initialLight));
+    });
   });
 }
+

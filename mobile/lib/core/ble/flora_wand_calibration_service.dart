@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 /// Calibrated agronomic readings and human-readable interpretations for FloraWand sensors.
@@ -19,6 +20,7 @@ class CalibratedTelemetry {
     required this.batteryPercent,
     required this.isProbeInserted,
     required this.timestamp,
+    this.hasReading = true,
   });
 
   /// Volumetric water content percentage (0.0% to 100.0%).
@@ -50,19 +52,41 @@ class CalibratedTelemetry {
   /// Timestamp of telemetry acquisition.
   final DateTime timestamp;
 
-  /// Formatted moisture display (e.g. "64%").
-  String get formattedMoisture => '${soilMoisturePercent.toStringAsFixed(0)}%';
+  /// True when live physical telemetry has been acquired from the wand.
+  final bool hasReading;
 
-  /// Formatted temperature display (e.g. "26.4°C").
-  String get formattedTemperature => '${temperatureCelsius.toStringAsFixed(1)}°C';
+  /// Formatted moisture display (e.g. "64%" or "--" placeholder).
+  String get formattedMoisture => hasReading ? '${soilMoisturePercent.toStringAsFixed(0)}%' : '--';
 
-  /// Formatted humidity display (e.g. "68%").
-  String get formattedHumidity => '${humidityPercent.toStringAsFixed(0)}%';
+  /// Formats any Celsius temperature into either Celsius or Fahrenheit based on [isCelsius].
+  static String formatTemp(double? celsius, {bool isCelsius = true}) {
+    if (celsius == null) return '--';
+    if (isCelsius) {
+      return '${celsius.toStringAsFixed(1)}°C';
+    }
+    final fahrenheit = (celsius * 1.8) + 32.0;
+    return '${fahrenheit.toStringAsFixed(1)}°F';
+  }
 
-  /// Formatted light display (e.g. "850 Lux" or "1.2k Lux").
-  String get formattedLight => lightLux >= 1000
-      ? '${(lightLux / 1000).toStringAsFixed(1)}k Lux'
-      : '${lightLux.toStringAsFixed(0)} Lux';
+  /// Formatted temperature display conforming to [isCelsius] user preference.
+  String formatTemperature({bool isCelsius = true}) {
+    if (!hasReading) return '--';
+    return formatTemp(temperatureCelsius, isCelsius: isCelsius);
+  }
+
+  /// Formatted temperature display (defaults to Celsius for backward compatibility).
+  String get formattedTemperature => formatTemperature(isCelsius: true);
+
+  /// Formatted humidity display (e.g. "68%" or "--" placeholder).
+  String get formattedHumidity => hasReading ? '${humidityPercent.toStringAsFixed(0)}%' : '--';
+
+  /// Formatted light display (e.g. "850 Lux" or "--" placeholder).
+  String get formattedLight {
+    if (!hasReading) return '--';
+    return lightLux >= 1000
+        ? '${(lightLux / 1000).toStringAsFixed(1)}k Lux'
+        : '${lightLux.toStringAsFixed(0)} Lux';
+  }
 
   /// Returns a copy of [CalibratedTelemetry] with updated fields.
   CalibratedTelemetry copyWith({
@@ -81,6 +105,7 @@ class CalibratedTelemetry {
     int? batteryPercent,
     bool? isProbeInserted,
     DateTime? timestamp,
+    bool? hasReading,
   }) {
     return CalibratedTelemetry(
       soilMoisturePercent: soilMoisturePercent ?? this.soilMoisturePercent,
@@ -98,27 +123,29 @@ class CalibratedTelemetry {
       batteryPercent: batteryPercent ?? this.batteryPercent,
       isProbeInserted: isProbeInserted ?? this.isProbeInserted,
       timestamp: timestamp ?? this.timestamp,
+      hasReading: hasReading ?? this.hasReading,
     );
   }
 
-  /// Factory creating fallback offline / default readings.
-  factory CalibratedTelemetry.initial() {
+  /// Factory creating placeholder offline / default unmeasured state.
+  factory CalibratedTelemetry.initial({bool hasReading = false}) {
     return CalibratedTelemetry(
-      soilMoisturePercent: 64.0,
-      soilMoistureTag: 'Good',
+      soilMoisturePercent: 0.0,
+      soilMoistureTag: '--',
       isMoistureWarning: false,
-      temperatureCelsius: 26.4,
-      temperatureTag: 'Good',
+      temperatureCelsius: 0.0,
+      temperatureTag: '--',
       isTemperatureWarning: false,
-      humidityPercent: 68.0,
-      humidityTag: 'Good',
+      humidityPercent: 0.0,
+      humidityTag: '--',
       isHumidityWarning: false,
-      lightLux: 850.0,
-      lightTag: 'Normal',
+      lightLux: 0.0,
+      lightTag: '--',
       isLightWarning: false,
       batteryPercent: 92,
-      isProbeInserted: true,
+      isProbeInserted: false,
       timestamp: DateTime.now(),
+      hasReading: hasReading,
     );
   }
 }
@@ -151,25 +178,20 @@ class FloraWandCalibrationService {
     required double rawLight,
     required int rawBattery,
     DateTime? timestamp,
+    bool isDirectLux = false,
   }) {
     final now = timestamp ?? DateTime.now();
 
     // 1. Soil Moisture Calibration & Open-Air Probe Grounding Check
-    final isProbeInserted = rawMoisture > 400 && rawMoisture < openAirThresholdAdc;
     double moisturePercent;
     String moistureTag;
     bool moistureWarning;
+    bool isProbeInserted;
 
-    if (!isProbeInserted) {
-      moisturePercent = 0.0;
-      moistureTag = rawMoisture >= openAirThresholdAdc ? 'Probe in Air' : 'Sensor Fault';
-      moistureWarning = true;
-    } else {
-      // Linear interpolation between calibrated dry air and submerged water
-      final span = (airDryAdc - waterSaturatedAdc).toDouble();
-      final normalized = span > 0 ? (airDryAdc - rawMoisture) / span * 100.0 : 50.0;
-      moisturePercent = normalized.clamp(0.0, 100.0);
-
+    if (rawMoisture <= 100 && rawMoisture >= 0) {
+      // Direct percentage transmitted by firmware (0% - 100%)
+      moisturePercent = rawMoisture.toDouble();
+      isProbeInserted = moisturePercent > 0.0;
       if (moisturePercent < 25.0) {
         moistureTag = 'Too Dry';
         moistureWarning = true;
@@ -180,15 +202,40 @@ class FloraWandCalibrationService {
         moistureTag = 'Good';
         moistureWarning = false;
       }
+    } else {
+      // Raw 12-bit capacitive ADC counts (dry air ~3200, submerged water ~1200)
+      isProbeInserted = rawMoisture > 400 && rawMoisture < openAirThresholdAdc;
+      if (!isProbeInserted) {
+        moisturePercent = 0.0;
+        moistureTag = rawMoisture >= openAirThresholdAdc ? 'Probe in Air' : 'Sensor Fault';
+        moistureWarning = true;
+      } else {
+        final span = (airDryAdc - waterSaturatedAdc).toDouble();
+        final normalized = span > 0 ? (airDryAdc - rawMoisture) / span * 100.0 : 50.0;
+        moisturePercent = normalized.clamp(0.0, 100.0);
+
+        if (moisturePercent < 25.0) {
+          moistureTag = 'Too Dry';
+          moistureWarning = true;
+        } else if (moisturePercent > 80.0) {
+          moistureTag = 'Waterlogged';
+          moistureWarning = true;
+        } else {
+          moistureTag = 'Good';
+          moistureWarning = false;
+        }
+      }
     }
 
     // 2. Temperature Calibration & Bounds Checking (-10°C to 60°C)
-    // If rawTemperature is passed as scaled integer (e.g. 264 for 26.4°C), normalize it
     double temp = rawTemperature;
     if (temp > 150.0 && temp < 1000.0) {
       temp = temp / 10.0; // Scaled by 10 (e.g. 265 -> 26.5°C)
     } else if (temp >= 1000.0) {
       temp = temp / 100.0; // Scaled by 100 (e.g. 2650 -> 26.5°C)
+    } else if (temp > 70.0 && temp <= 130.0) {
+      // Likely Fahrenheit (e.g. 77°F -> 25°C)
+      temp = (temp - 32.0) * 5.0 / 9.0;
     }
     temp = temp.clamp(-10.0, 60.0);
 
@@ -228,12 +275,26 @@ class FloraWandCalibrationService {
     }
 
     // 4. Light / Lux Calibration
-    // If rawLight is 12-bit ADC (0 - 4095), map non-linearly to approximate Lux (0 - 50,000 Lux)
     double lightLux = rawLight;
-    if (rawLight <= 4095 && rawLight > 0) {
-      // Typical ESP32 LDR voltage divider mapping
-      final normalizedAdc = (4095 - rawLight) / 4095.0;
-      lightLux = (normalizedAdc * normalizedAdc * 50000.0).clamp(0.0, 65000.0);
+    if (!isDirectLux && rawLight <= 4095) {
+      if (rawLight <= 15.0) {
+        // Darkness baseline (covered sensor or night)
+        lightLux = 0.0;
+      } else {
+        // Circuit: 3.3V -> LDR -> ADC -> 10kΩ pull-down -> GND (ESP32 12-bit ADC).
+        // As light increases, LDR resistance drops, and ADC voltage climbs.
+        // Conductance ratio R_fixed / R_ldr = ADC / (4095 - ADC).
+        // Photoconductive power-law: Lux = A * (ratio)^(1/gamma)
+        // Calibrated against hardware benchmarks:
+        // - Darkness (ADC <= 15) -> 0 Lux
+        // - Normal room light (ADC 200 - 350) -> ~220 - 465 Lux
+        // - Direct bright sunlight (ADC 3000 - 3500) -> ~31,700 - 82,500 Lux
+        final clampedAdc = rawLight.clamp(1.0, 4094.0);
+        final ratio = clampedAdc / (4095.0 - clampedAdc);
+        const double scaleFactor = 9000.0;
+        const double exponent = 1.25; // 1 / gamma (GL5528 standard gamma ~ 0.8)
+        lightLux = scaleFactor * math.pow(ratio, exponent);
+      }
     }
     lightLux = lightLux.clamp(0.0, 100000.0);
 
@@ -245,7 +306,7 @@ class FloraWandCalibrationService {
     } else if (lightLux > 45000.0) {
       lightTag = 'Intense Sun';
       lightWarning = false;
-    } else if (lightLux > 600.0) {
+    } else if (lightLux > 2500.0) {
       lightTag = 'Bright';
       lightWarning = false;
     } else {
@@ -254,7 +315,13 @@ class FloraWandCalibrationService {
     }
 
     // 5. Battery Level Calibration (0% to 100%)
-    final battery = rawBattery.clamp(0, 100);
+    int battery;
+    if (rawBattery >= 2500 && rawBattery <= 4500) {
+      // Millivolts from Li-ion battery (3000mV empty to 4200mV full)
+      battery = (((rawBattery - 3000) / 1200.0) * 100.0).clamp(0.0, 100.0).round();
+    } else {
+      battery = rawBattery.clamp(0, 100);
+    }
 
     return CalibratedTelemetry(
       soilMoisturePercent: double.parse(moisturePercent.toStringAsFixed(1)),
