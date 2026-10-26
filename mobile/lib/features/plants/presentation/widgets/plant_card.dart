@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/ble/flora_wand_calibration_service.dart';
 import '../../../../core/theme/agri_theme_extension.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../domain/entities/plant_model.dart';
 import 'plant_status_badge.dart';
 
 /// Interactive card component representing a monitored crop plot.
-class PlantCard extends StatelessWidget {
+class PlantCard extends ConsumerWidget {
   const PlantCard({
     required this.plant,
     required this.onDelete,
@@ -26,23 +29,34 @@ class PlantCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final agriColors = context.agriTheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    final isCelsius = ref.watch(isCelsiusMetricProvider);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.outlineVariant, width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(15, 23, 42, 0.04),
-            blurRadius: 4,
-            offset: Offset(0, 1),
-          ),
-        ],
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outlineVariant.withValues(alpha: 0.25)
+              : AppColors.outlineVariant,
+          width: 1,
+        ),
+        boxShadow: isDark
+            ? const []
+            : const [
+                BoxShadow(
+                  color: Color.fromRGBO(15, 23, 42, 0.04),
+                  blurRadius: 4,
+                  offset: Offset(0, 1),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,7 +72,7 @@ class PlantCard extends StatelessWidget {
                     Text(
                       plant.name,
                       style: AppTypography.headlineSmall.copyWith(
-                        color: AppColors.onSurface,
+                        color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),
@@ -67,7 +81,7 @@ class PlantCard extends StatelessWidget {
                     Text(
                       plant.variety,
                       style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.onSurfaceVariant,
+                        color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -76,7 +90,7 @@ class PlantCard extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.more_vert, size: 20),
-                color: AppColors.onSurfaceVariant,
+                color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                 onPressed: () {
                   _showActionsBottomSheet(context);
                 },
@@ -91,13 +105,13 @@ class PlantCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
+                  color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(9999),
                 ),
                 child: Text(
                   _formatGrowthStage(plant.stage),
                   style: AppTypography.labelUi.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                     fontSize: 10,
                   ),
                 ),
@@ -109,9 +123,14 @@ class PlantCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: isDark ? colorScheme.surfaceContainer : AppColors.surface,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.outlineVariant, width: 0.8),
+              border: Border.all(
+                color: isDark
+                    ? colorScheme.outlineVariant.withValues(alpha: 0.25)
+                    : AppColors.outlineVariant,
+                width: 0.8,
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -121,13 +140,25 @@ class PlantCard extends StatelessWidget {
                   value: '${plant.soilMoisturePercent.toStringAsFixed(1)}%',
                   accentColor: agriColors.moistureCyan,
                 ),
-                Container(width: 1, height: 20, color: AppColors.outlineVariant),
+                Container(
+                  width: 1,
+                  height: 20,
+                  color: isDark
+                      ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+                      : AppColors.outlineVariant,
+                ),
                 _MiniTelemetryMetric(
                   label: 'Root Temp',
-                  value: '${plant.soilTemperatureCelsius.toStringAsFixed(1)}°C',
+                  value: CalibratedTelemetry.formatTemp(plant.soilTemperatureCelsius, isCelsius: isCelsius),
                   accentColor: agriColors.richOchreSoil,
                 ),
-                Container(width: 1, height: 20, color: AppColors.outlineVariant),
+                Container(
+                  width: 1,
+                  height: 20,
+                  color: isDark
+                      ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+                      : AppColors.outlineVariant,
+                ),
                 _MiniTelemetryMetric(
                   label: 'Nutrients',
                   value: 'NPK OK',
@@ -152,7 +183,7 @@ class PlantCard extends StatelessWidget {
                   child: Text(
                     plant.primaryDiagnosis!,
                     style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.onSurface,
+                      color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -168,8 +199,13 @@ class PlantCard extends StatelessWidget {
   }
 
   void _showActionsBottomSheet(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: isDark ? colorScheme.surfaceContainerHigh : null,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -180,10 +216,15 @@ class PlantCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppColors.error),
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: isDark ? colorScheme.error : AppColors.error,
+                ),
                 title: Text(
                   'Remove Plot from Scouting',
-                  style: AppTypography.bodyMedium.copyWith(color: AppColors.error),
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: isDark ? colorScheme.error : AppColors.error,
+                  ),
                 ),
                 onTap: () {
                   Navigator.pop(bottomSheetContext);
@@ -211,12 +252,16 @@ class _MiniTelemetryMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+
     return Column(
       children: [
         Text(
           label.toUpperCase(),
           style: AppTypography.labelUi.copyWith(
-            color: AppColors.onSurfaceVariant,
+            color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
             fontSize: 9,
           ),
         ),
@@ -224,7 +269,7 @@ class _MiniTelemetryMetric extends StatelessWidget {
         Text(
           value,
           style: AppTypography.telemetrySmall.copyWith(
-            color: AppColors.onSurface,
+            color: isDark ? colorScheme.onSurface : AppColors.onSurface,
             fontWeight: FontWeight.w700,
           ),
         ),

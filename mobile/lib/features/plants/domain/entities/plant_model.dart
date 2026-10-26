@@ -12,7 +12,14 @@ enum CropGrowthStage {
   vegetative,
   flowering,
   fruiting,
-  harvesting,
+  harvesting;
+
+  String get displayName => switch (this) {
+    CropGrowthStage.vegetative => 'Vegetative',
+    CropGrowthStage.flowering => 'Flowering',
+    CropGrowthStage.fruiting => 'Fruiting',
+    CropGrowthStage.harvesting => 'Harvesting',
+  };
 }
 
 /// Immutable domain entity representing a monitored crop or plant plot.

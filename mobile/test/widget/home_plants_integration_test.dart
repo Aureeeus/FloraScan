@@ -258,19 +258,19 @@ void main() {
 
       expect(find.text('Sweet Plum Tomato'), findsWidgets);
       expect(find.text('Red Habanero Chili'), findsWidgets);
-      expect(find.text('View Sensor Data'), findsNWidgets(2));
+      expect(find.text('Plant Details'), findsNWidgets(2));
 
-      // Act: Tap "View Sensor Data" for Red Habanero Chili
-      await tester.ensureVisible(find.text('View Sensor Data').last);
-      await tester.tap(find.text('View Sensor Data').last);
+      // Act: Tap "Plant Details" for Red Habanero Chili
+      await tester.ensureVisible(find.text('Plant Details').last);
+      await tester.tap(find.text('Plant Details').last);
       await tester.pump();
       await tester.runAsync(() async {
         await Future.delayed(const Duration(milliseconds: 300));
       });
       await tester.pumpAndSettle();
 
-      // Assert: Telemetry preview section displays Red Habanero Chili
-      expect(find.text('LIVE OPTICAL & PROBE TELEMETRY'), findsOneWidget);
+      // Assert: Crop profile section displays Red Habanero Chili
+      expect(find.text('Active Crop Profile'), findsOneWidget);
       expect(find.text('Red Habanero Chili (Capsicum chinense)'), findsOneWidget);
     });
 

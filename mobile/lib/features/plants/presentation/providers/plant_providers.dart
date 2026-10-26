@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:florascan_1/features/settings/presentation/providers/settings_providers.dart';
 import '../../../../core/database/app_database.dart';
 import '../../data/repositories/sqlite_plant_repository.dart';
 import '../../domain/entities/plant_model.dart';
@@ -68,3 +69,44 @@ final plantListNotifierProvider =
     AsyncNotifierProvider<PlantListNotifier, List<PlantModel>>(
   PlantListNotifier.new,
 );
+
+/// Notifier managing the customizable garden plot name, persisted to SQLite.
+class GardenPlotNameNotifier extends Notifier<String> {
+  static const String _prefKey = 'garden_plot_name';
+  static const String defaultName = 'Home Garden';
+
+  @override
+  String build() {
+    final prefsRepo = ref.watch(userPreferencesRepositoryProvider);
+
+    Future.microtask(() async {
+      try {
+        final savedName = await prefsRepo.getPreference(_prefKey);
+        if (savedName != null && savedName.trim().isNotEmpty && ref.mounted) {
+          state = savedName;
+        }
+      } catch (_) {
+        // Fallback gracefully to default
+      }
+    });
+
+    return defaultName;
+  }
+
+  /// Sets the garden plot name and asynchronously persists to SQLite.
+  Future<void> setName(String newName) async {
+    final trimmed = newName.trim();
+    final effectiveName = trimmed.isEmpty ? defaultName : trimmed;
+    if (state == effectiveName) return;
+
+    state = effectiveName;
+    final prefsRepo = ref.read(userPreferencesRepositoryProvider);
+    await prefsRepo.setPreference(_prefKey, effectiveName);
+  }
+}
+
+/// Provider exposing reactive, SQLite-persisted garden plot name.
+final gardenPlotNameProvider =
+    NotifierProvider<GardenPlotNameNotifier, String>(GardenPlotNameNotifier.new);
+
+

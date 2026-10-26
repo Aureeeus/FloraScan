@@ -15,22 +15,31 @@ class PlantStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final agriColors = context.agriTheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
 
     final (label, color, backgroundColor) = switch (status) {
       PlantHealthStatus.healthy => (
           'Healthy Vigor',
-          agriColors.healthyVigor,
-          agriColors.healthyVigor.withValues(alpha: 0.12),
+          isDark ? const Color(0xFF34D399) : agriColors.healthyVigor,
+          isDark
+              ? const Color(0xFF34D399).withValues(alpha: 0.15)
+              : agriColors.healthyVigor.withValues(alpha: 0.12),
         ),
       PlantHealthStatus.caution => (
           'Caution (Stress)',
-          agriColors.cautionStress,
-          agriColors.cautionStress.withValues(alpha: 0.12),
+          isDark ? colorScheme.tertiary : agriColors.cautionStress,
+          isDark
+              ? colorScheme.tertiary.withValues(alpha: 0.18)
+              : agriColors.cautionStress.withValues(alpha: 0.12),
         ),
       PlantHealthStatus.critical => (
           'Critical (Outbreak)',
-          agriColors.severeOutbreak,
-          agriColors.severeOutbreak.withValues(alpha: 0.12),
+          isDark ? colorScheme.error : agriColors.severeOutbreak,
+          isDark
+              ? colorScheme.error.withValues(alpha: 0.18)
+              : agriColors.severeOutbreak.withValues(alpha: 0.12),
         ),
     };
 
