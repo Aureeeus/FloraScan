@@ -4,10 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/ble/flora_wand_ble_service.dart';
+import '../../../core/routing/navigation_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/hardware_status_hud.dart';
-import '../../home/presentation/providers/telemetry_providers.dart';
 import '../domain/entities/diagnostic_scan_model.dart';
 import '../domain/entities/telemetry_reading.dart';
 import 'providers/diagnostic_providers.dart';
@@ -33,6 +32,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
   bool _isFlashOn = false;
   CameraController? _cameraController;
   bool _isCameraInitializing = false;
+  bool _isCameraDisposing = false;
+  String? _cameraError;
   final ImagePicker _picker = ImagePicker();
 
   final List<String> _crops = const ['Tomato', 'Red Chili', 'Eggplant'];
@@ -44,7 +45,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
     if (widget.cameraController != null) {
       _cameraController = widget.cameraController;
     } else {
-      _initializeLiveCamera();
+      // Initialize live camera if Scan screen is currently active
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (ref.read(activeNavBranchProvider) == 2) {
+          _initializeLiveCamera();
+        }
+      });
     }
   }
 
@@ -52,48 +59,87 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     if (widget.cameraController == null) {
-      _cameraController?.dispose();
+      _disposeCurrentCamera();
     }
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _cameraController;
-    if (controller == null || !controller.value.isInitialized) return;
+    if (widget.cameraController != null) return;
+
+    final isScanActive = ref.read(activeNavBranchProvider) == 2;
 
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      if (widget.cameraController == null) {
-        controller.dispose();
-        _cameraController = null;
-        if (mounted) {
-          setState(() {});
-        }
-      }
+      // Release camera hardware immediately when app is paused or external intent is opened
+      _disposeCurrentCamera();
     } else if (state == AppLifecycleState.resumed) {
-      if (widget.cameraController == null) {
+      // Re-initialize live camera if user is currently on the Scan screen
+      if (isScanActive && mounted) {
         _initializeLiveCamera();
       }
     }
   }
 
+  /// Cleanly disposes the current camera controller and releases hardware locks.
+  Future<void> _disposeCurrentCamera() async {
+    if (widget.cameraController != null) return;
+    final controller = _cameraController;
+    _cameraController = null;
+    _isFlashOn = false;
+
+    if (controller != null) {
+      _isCameraDisposing = true;
+      try {
+        await controller.dispose();
+      } catch (e) {
+        debugPrint('FloraScan live camera disposal error: $e');
+      } finally {
+        _isCameraDisposing = false;
+      }
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  /// Initializes the optical sensor with camera hardware enumeration and safety checks.
   Future<void> _initializeLiveCamera() async {
+    if (widget.cameraController != null) return;
     if (_isCameraInitializing) return;
+
+    // Await any ongoing disposal to avoid native Camera2/AVFoundation lock collisions
+    while (_isCameraDisposing) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (!mounted) return;
+    }
+
+    if (_cameraController != null) {
+      await _disposeCurrentCamera();
+    }
+
+    if (!mounted) return;
+    if (ref.read(activeNavBranchProvider) != 2) return;
+
     setState(() {
       _isCameraInitializing = true;
+      _cameraError = null;
     });
 
     try {
-      final cameras = await availableCameras().timeout(
-        const Duration(milliseconds: 600),
-        onTimeout: () => <CameraDescription>[],
-      );
+      final cameras = await availableCameras();
+
+      if (!mounted) return;
+      if (ref.read(activeNavBranchProvider) != 2) {
+        setState(() => _isCameraInitializing = false);
+        return;
+      }
+
       if (cameras.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _isCameraInitializing = false;
-          });
-        }
+        setState(() {
+          _isCameraInitializing = false;
+          _cameraError = 'No optical sensor detected on device.';
+        });
         return;
       }
 
@@ -111,17 +157,29 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
 
       await controller.initialize();
 
-      if (mounted) {
-        setState(() {
-          _cameraController = controller;
-          _isCameraInitializing = false;
-        });
+      if (!mounted) {
+        await controller.dispose();
+        return;
       }
+
+      // Check if user navigated away while camera was initializing
+      if (ref.read(activeNavBranchProvider) != 2) {
+        await controller.dispose();
+        setState(() => _isCameraInitializing = false);
+        return;
+      }
+
+      setState(() {
+        _cameraController = controller;
+        _isCameraInitializing = false;
+        _cameraError = null;
+      });
     } catch (e) {
       debugPrint('FloraScan live camera initialization: $e');
       if (mounted) {
         setState(() {
           _isCameraInitializing = false;
+          _cameraError = 'Failed to connect to optical sensor.';
         });
       }
     }
@@ -177,7 +235,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
       }
     }
 
-    // Graceful fallback to image picker camera
+    // Graceful fallback to image picker camera (release live camera lock first)
+    await _disposeCurrentCamera();
     await _pickAndScan(ImageSource.camera);
   }
 
@@ -249,6 +308,50 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
           ),
         );
       }
+
+      if (_cameraError != null) {
+        return Container(
+          color: const Color(0xFF0F172A),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.videocam_off_outlined, color: AppColors.solarAmber, size: 36),
+                const SizedBox(height: 10),
+                Text(
+                  _cameraError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _initializeLiveCamera,
+                  icon: const Icon(Icons.refresh, size: 14, color: AppColors.leafBright),
+                  label: const Text(
+                    'RECONNECT SENSOR',
+                    style: TextStyle(
+                      color: AppColors.leafBright,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.leafBright, width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
       return null;
     }
 
@@ -263,7 +366,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
     );
   }
 
-  void _displayDiagnosisSheet(dynamic result) {
+  void _displayDiagnosisSheet(DiagnosticScanResult result) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -280,16 +383,20 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
-    final scanState = ref.watch(activeDiagnosticScanNotifierProvider);
-    final telemetryAsync = ref.watch(liveTelemetryProvider);
-    final recentScansAsync = ref.watch(recentScansProvider);
+    // Re-initialize camera when navigating to Scan screen; dispose when navigating away
+    ref.listen<int>(activeNavBranchProvider, (previous, next) {
+      if (next == 2 && previous != 2) {
+        _initializeLiveCamera();
+      } else if (previous == 2 && next != 2) {
+        _disposeCurrentCamera();
+      }
+    });
 
+    final scanState = ref.watch(activeDiagnosticScanNotifierProvider);
     final isAnalyzing = scanState.isLoading;
-    final telemetry = telemetryAsync.value;
-    final recentScans = recentScansAsync.value ?? const <DiagnosticScanResult>[];
-    final onnxLatency = (recentScans.isNotEmpty
-        ? recentScans.first.inferenceLatencyMs
-        : telemetry?.localInferenceLatencyMs) ?? 38;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Deep dark camera canvas
@@ -302,20 +409,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                 children: [
                   const SizedBox(height: 12),
                   // Header Bar
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'OPTICAL SCOUT',
-                          style: AppTypography.labelUi.copyWith(
-                            color: Colors.white70,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const HardwareStatusHud(),
-                      ],
+                  Center(
+                    child: Text(
+                      'OPTICAL SCOUT',
+                      style: AppTypography.labelUi.copyWith(
+                        color: Colors.white70,
+                        letterSpacing: 1.2,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -363,60 +463,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                       }).toList(),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  // Real-Time ONNX AI Telemetry Strip
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(color: Colors.white24, width: 0.8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFF22C55E),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'ONNX Edge AI',
-                          style: AppTypography.labelUi.copyWith(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(width: 1, height: 9, color: Colors.white24),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${onnxLatency}ms Local Inference',
-                          style: AppTypography.telemetrySmall.copyWith(
-                            color: AppColors.secondary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(width: 1, height: 9, color: Colors.white24),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Offline Mode',
-                          style: AppTypography.telemetrySmall.copyWith(
-                            color: Colors.white70,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 12),
                   // Viewfinder Frame with Live Camera Feed & AR Overlay
                   Expanded(
                     child: Center(
@@ -530,26 +577,33 @@ class _ScanScreenState extends ConsumerState<ScanScreen> with WidgetsBindingObse
                     child: Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(12),
+                        border: isDark
+                            ? Border.all(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                              )
+                            : null,
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const CircularProgressIndicator(color: AppColors.secondary),
+                          CircularProgressIndicator(
+                            color: isDark ? colorScheme.secondary : AppColors.secondary,
+                          ),
                           const SizedBox(height: 16),
                           Text(
-                            'Executing On-Device Inference...',
+                            'Analyzing Leaf Pathology...',
                             style: AppTypography.bodyMedium.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
+                              color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'ONNX Solanaceae Model v1.4',
+                            'Evaluating foliar symptoms & biometrics',
                             style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.onSurfaceVariant,
+                              color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                             ),
                           ),
                         ],

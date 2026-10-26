@@ -2,16 +2,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/app_database.dart';
 import '../../data/repositories/sqlite_diagnostic_repository.dart';
+import '../../data/services/onnx_optical_inference_service.dart';
 import '../../domain/entities/diagnostic_scan_model.dart';
 import '../../domain/entities/telemetry_reading.dart';
 import '../../domain/repositories/diagnostic_repository.dart';
+import '../../domain/services/optical_inference_service.dart';
+
+/// Dependency injection provider for [OpticalInferenceService].
+final opticalInferenceServiceProvider = Provider<OpticalInferenceService>((ref) {
+  final service = OnnxOpticalInferenceService();
+  ref.onDispose(() {
+    service.dispose();
+  });
+  return service;
+});
 
 /// Dependency injection provider for [DiagnosticRepository].
 ///
 /// Injects SQLite-backed repository for optical pathology inference and offline scan logging.
 final diagnosticRepositoryProvider = Provider<DiagnosticRepository>((ref) {
   final appDb = ref.watch(appDatabaseProvider);
-  return SqliteDiagnosticRepository(appDb);
+  final opticalService = ref.watch(opticalInferenceServiceProvider);
+  return SqliteDiagnosticRepository(
+    appDb,
+    opticalService: opticalService,
+  );
 });
 
 /// Reactive provider fetching recent diagnostic scans.

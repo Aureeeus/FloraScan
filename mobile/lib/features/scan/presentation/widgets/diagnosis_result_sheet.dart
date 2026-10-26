@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -6,6 +8,7 @@ import '../../../../core/widgets/sproutly_mascot.dart';
 import '../../../plants/domain/entities/plant_model.dart';
 import '../../../plants/presentation/providers/diagnostic_task_providers.dart';
 import '../../../plants/presentation/providers/plant_providers.dart';
+import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../../../core/ble/flora_wand_ble_service.dart';
 import '../../domain/entities/diagnostic_scan_model.dart';
 
@@ -66,24 +69,26 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
         telemetry.isMoistureWarning ||
         telemetry.isTemperatureWarning ||
         telemetry.isHumidityWarning) {
-      return 'BOTH: DISEASE & ENVIRONMENT PROBLEM';
+      return 'Dual Issue: Disease & Environment Problem';
     }
     if (result.severity == DiagnosticSeverity.healthy) {
-      return 'HEALTHY CANOPY: OPTIMAL CONDITIONS';
+      return 'Healthy Canopy: Optimal Conditions';
     }
-    return 'FOLIAR PATHOLOGY DETECTED';
+    return 'Foliar Pathology Detected';
   }
 
   String _resolveMasterVerdictDescription(
     DiagnosticScanResult result,
     CalibratedTelemetry telemetry,
-    PlantModel? plant,
-  ) {
+    PlantModel? plant, {
+    bool isCelsius = true,
+  }) {
     final cropName = plant?.name ?? (result.targetCrop.isNotEmpty ? result.targetCrop : 'plant');
     final condition = result.detectedCondition;
+    final tempStr = telemetry.formatTemperature(isCelsius: isCelsius);
 
     if (result.severity == DiagnosticSeverity.healthy) {
-      return 'Your $cropName foliage is clean, turgid, and pathogen-free. Surrounding root-zone moisture (${telemetry.formattedMoisture}) and climate (${telemetry.formattedTemperature}) are optimal.';
+      return 'Your $cropName foliage is clean, turgid, and pathogen-free. Surrounding root-zone moisture (${telemetry.formattedMoisture}) and climate ($tempStr) are optimal.';
     }
 
     if (telemetry.soilMoisturePercent > 70) {
@@ -91,7 +96,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
     } else if (telemetry.soilMoisturePercent < 25 && telemetry.isProbeInserted) {
       return 'Your $cropName leaf shows symptoms of $condition under acute drought stress (${telemetry.formattedMoisture} moisture), weakening foliar defenses.';
     } else if (telemetry.isTemperatureWarning) {
-      return 'Your $cropName leaf shows symptoms of $condition exacerbated by thermal stress (${telemetry.formattedTemperature}, ${telemetry.temperatureTag}).';
+      return 'Your $cropName leaf shows symptoms of $condition exacerbated by thermal stress ($tempStr, ${telemetry.temperatureTag}).';
     } else if (telemetry.isHumidityWarning) {
       return 'Your $cropName leaf has symptoms of $condition. Ambient humidity is stagnant (${telemetry.formattedHumidity}), prolonging leaf surface wetness.';
     }
@@ -120,10 +125,491 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
     );
   }
 
+  Color _confidenceBgColor(double confidence) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    if (confidence >= 85.0) {
+      return isDark
+          ? colorScheme.secondaryContainer.withValues(alpha: 0.35)
+          : AppColors.secondaryContainer;
+    } else if (confidence >= 70.0) {
+      return isDark
+          ? colorScheme.surfaceContainerHigh
+          : AppColors.surfaceContainerHigh;
+    } else {
+      return isDark
+          ? colorScheme.errorContainer.withValues(alpha: 0.35)
+          : AppColors.errorContainer;
+    }
+  }
+
+  Color _confidenceTextColor(double confidence) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    if (confidence >= 85.0) {
+      return isDark
+          ? colorScheme.secondary
+          : AppColors.secondary;
+    } else if (confidence >= 70.0) {
+      return isDark
+          ? colorScheme.onSurface
+          : AppColors.onSurface;
+    } else {
+      return isDark
+          ? colorScheme.error
+          : AppColors.onErrorContainer;
+    }
+  }
+
+  bool _hasValidLocalImage(String? path) {
+    if (path == null || path.isEmpty) return false;
+    if (kIsWeb) return false;
+    try {
+      return File(path).existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool get _isTestEnvironment {
+    if (kIsWeb) return false;
+    return Platform.environment.containsKey('FLUTTER_TEST');
+  }
+
+  static const Map<String, String> _pathologyReferenceMap = {
+    'early blight': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Alternaria_solani_early_blight_on_tomato.jpg/640px-Alternaria_solani_early_blight_on_tomato.jpg',
+    'late blight': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Phytophthora_infestans_tomato.jpg/640px-Phytophthora_infestans_tomato.jpg',
+    'septoria': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Septoria_lycopersici_spots.jpg/640px-Septoria_lycopersici_spots.jpg',
+    'yellow leaf curl': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Tomato_yellow_leaf_curl_virus.jpg/640px-Tomato_yellow_leaf_curl_virus.jpg',
+    'leaf mold': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Passalora_fulva_tomato_leaf_mold.jpg/640px-Passalora_fulva_tomato_leaf_mold.jpg',
+    'anthracnose': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Colletotrichum_capsici_on_pepper.jpg/640px-Colletotrichum_capsici_on_pepper.jpg',
+    'bacterial spot': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Xanthomonas_campestris_pepper_leaf.jpg/640px-Xanthomonas_campestris_pepper_leaf.jpg',
+    'cercospora': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Cercospora_capsici_frogeye_spot.jpg/640px-Cercospora_capsici_frogeye_spot.jpg',
+    'frogeye': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Cercospora_capsici_frogeye_spot.jpg/640px-Cercospora_capsici_frogeye_spot.jpg',
+    'curl virus': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Chili_leaf_curl_virus_symptoms.jpg/640px-Chili_leaf_curl_virus_symptoms.jpg',
+    'mosaic': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Tobacco_mosaic_virus_symptoms_leaf.jpg/640px-Tobacco_mosaic_virus_symptoms_leaf.jpg',
+    'white mold': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Sclerotinia_sclerotiorum_stem_rot.jpg/640px-Sclerotinia_sclerotiorum_stem_rot.jpg',
+    'wilt': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Ralstonia_solanacearum_wilt.jpg/640px-Ralstonia_solanacearum_wilt.jpg',
+    'little leaf': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Phytoplasma_little_leaf.jpg/640px-Phytoplasma_little_leaf.jpg',
+    'pest': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Flea_beetle_damage_leaf.jpg/640px-Flea_beetle_damage_leaf.jpg',
+    'chlorosis': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Leaf_chlorosis_iron_deficiency.jpg/640px-Leaf_chlorosis_iron_deficiency.jpg',
+    'deficiency': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Leaf_chlorosis_iron_deficiency.jpg/640px-Leaf_chlorosis_iron_deficiency.jpg',
+    'healthy': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Healthy_tomato_plant_leaves.jpg/640px-Healthy_tomato_plant_leaves.jpg',
+  };
+
+  String _resolvePathologyReferenceUrl(String condition) {
+    final lower = condition.toLowerCase();
+    for (final entry in _pathologyReferenceMap.entries) {
+      if (lower.contains(entry.key)) {
+        return entry.value;
+      }
+    }
+    return 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Alternaria_solani_early_blight_on_tomato.jpg/640px-Alternaria_solani_early_blight_on_tomato.jpg';
+  }
+
+  /// Resolves the bundled offline reference image from the trained dataset.
+  String _resolvePathologyReferenceAsset(String condition, String crop) {
+    final lowerCond = condition.toLowerCase();
+    final lowerCrop = crop.toLowerCase();
+
+    // 1. Chili pathology classes
+    if (lowerCrop.contains('chili') || lowerCrop.contains('pepper')) {
+      if (lowerCond.contains('anthracnose')) return 'assets/pathology_reference/chili_anthracnose.jpg';
+      if (lowerCond.contains('bacterial')) return 'assets/pathology_reference/chili_bacterial_spot.jpg';
+      if (lowerCond.contains('cercospora') || lowerCond.contains('frogeye')) {
+        return 'assets/pathology_reference/chili_cercospora_leaf_spot.jpg';
+      }
+      if (lowerCond.contains('curl')) return 'assets/pathology_reference/chili_curl_virus.jpg';
+      if (lowerCond.contains('deficiency') || lowerCond.contains('nutrition') || lowerCond.contains('chlorosis')) {
+        return 'assets/pathology_reference/chili_nutrition_deficiency.jpg';
+      }
+      if (lowerCond.contains('white spot')) return 'assets/pathology_reference/chili_white_spot.jpg';
+      if (lowerCond.contains('healthy')) return 'assets/pathology_reference/chili_healthy.jpg';
+    }
+
+    // 2. Eggplant pathology classes
+    if (lowerCrop.contains('eggplant') || lowerCrop.contains('aubergine')) {
+      if (lowerCond.contains('pest') || lowerCond.contains('insect') || lowerCond.contains('flea')) {
+        return 'assets/pathology_reference/eggplant_insect_pest.jpg';
+      }
+      if (lowerCond.contains('leaf spot') || lowerCond.contains('cercospora') || lowerCond.contains('spot')) {
+        return 'assets/pathology_reference/eggplant_leaf_spot.jpg';
+      }
+      if (lowerCond.contains('mosaic')) return 'assets/pathology_reference/eggplant_mosaic_virus.jpg';
+      if (lowerCond.contains('small') || lowerCond.contains('little')) {
+        return 'assets/pathology_reference/eggplant_small_leaf.jpg';
+      }
+      if (lowerCond.contains('white mold') || lowerCond.contains('mold')) {
+        return 'assets/pathology_reference/eggplant_white_mold.jpg';
+      }
+      if (lowerCond.contains('wilt')) return 'assets/pathology_reference/eggplant_wilt.jpg';
+      if (lowerCond.contains('healthy')) return 'assets/pathology_reference/eggplant_healthy.jpg';
+    }
+
+    // 3. Tomato pathology classes
+    if (lowerCond.contains('early blight')) return 'assets/pathology_reference/tomato_early_blight.jpg';
+    if (lowerCond.contains('late blight')) return 'assets/pathology_reference/tomato_late_blight.jpg';
+    if (lowerCond.contains('septoria')) return 'assets/pathology_reference/tomato_septoria_leaf_spot.jpg';
+    if (lowerCond.contains('curl') || lowerCond.contains('tylcv')) {
+      return 'assets/pathology_reference/tomato_yellow_leaf_curl.jpg';
+    }
+    if (lowerCond.contains('mold')) return 'assets/pathology_reference/tomato_mold_leaf.jpg';
+    if (lowerCond.contains('healthy')) return 'assets/pathology_reference/tomato_healthy.jpg';
+
+    // 4. Cross-crop fallback by pathology keyword
+    if (lowerCond.contains('anthracnose')) return 'assets/pathology_reference/chili_anthracnose.jpg';
+    if (lowerCond.contains('bacterial')) return 'assets/pathology_reference/chili_bacterial_spot.jpg';
+    if (lowerCond.contains('cercospora') || lowerCond.contains('frogeye')) {
+      return 'assets/pathology_reference/chili_cercospora_leaf_spot.jpg';
+    }
+    if (lowerCond.contains('mosaic')) return 'assets/pathology_reference/eggplant_mosaic_virus.jpg';
+    if (lowerCond.contains('pest') || lowerCond.contains('insect')) {
+      return 'assets/pathology_reference/eggplant_insect_pest.jpg';
+    }
+    if (lowerCond.contains('wilt')) return 'assets/pathology_reference/eggplant_wilt.jpg';
+    if (lowerCond.contains('white mold')) return 'assets/pathology_reference/eggplant_white_mold.jpg';
+    if (lowerCond.contains('deficiency') || lowerCond.contains('chlorosis')) {
+      return 'assets/pathology_reference/chili_nutrition_deficiency.jpg';
+    }
+    if (lowerCond.contains('white spot')) return 'assets/pathology_reference/chili_white_spot.jpg';
+
+    return 'assets/pathology_reference/tomato_early_blight.jpg';
+  }
+
+  Widget _buildViewfinderCorners() {
+    return IgnorePointer(
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.topLeft,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.white70, width: 1.5),
+                    left: BorderSide(color: Colors.white70, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.topRight,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.white70, width: 1.5),
+                    right: BorderSide(color: Colors.white70, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.white70, width: 1.5),
+                    left: BorderSide(color: Colors.white70, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.white70, width: 1.5),
+                    right: BorderSide(color: Colors.white70, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCapturedLeafFrame() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    final imagePath = widget.result.capturedImagePath;
+    final hasLocal = _hasValidLocalImage(imagePath);
+    final isAsset = imagePath != null && imagePath.startsWith('assets/');
+
+    Widget content;
+    if (hasLocal) {
+      content = Image.file(
+        File(imagePath!),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, _, _) => _buildCapturedLeafFallback(),
+      );
+    } else if (isAsset) {
+      content = Image.asset(
+        imagePath,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, _, _) => _buildCapturedLeafFallback(),
+      );
+    } else {
+      content = _buildCapturedLeafFallback();
+    }
+
+    return Container(
+      height: 108,
+      decoration: BoxDecoration(
+        color: isDark
+            ? colorScheme.surfaceContainerHigh
+            : AppColors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outlineVariant.withValues(alpha: 0.35)
+              : AppColors.outlineVariant.withValues(alpha: 0.8),
+          width: 1.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8.5),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            content,
+            _buildViewfinderCorners(),
+            Positioned(
+              bottom: 5,
+              left: 5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Captured Frame',
+                      style: AppTypography.labelUi.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 9,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCapturedLeafFallback() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    return Container(
+      color: isDark
+          ? colorScheme.surfaceContainerHighest
+          : const Color(0xFF1E293B),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.center_focus_strong,
+              size: 34,
+              color: isDark
+                  ? colorScheme.secondary
+                  : AppColors.secondary.withValues(alpha: 0.8),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Optical Scout',
+              style: AppTypography.labelUi.copyWith(
+                color: Colors.white70,
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagnosedIllnessPicture() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    final condition = widget.result.detectedCondition.split('&').first.trim();
+    final assetPath = _resolvePathologyReferenceAsset(condition, widget.result.targetCrop);
+
+    Widget content;
+    if (_isTestEnvironment) {
+      content = _buildPathologyFallback(condition);
+    } else {
+      content = Image.asset(
+        assetPath,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, _, _) {
+          final url = _resolvePathologyReferenceUrl(condition);
+          return Image.network(
+            url,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (_, _, _) => _buildPathologyFallback(condition),
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return _buildPathologyFallback(condition);
+            },
+          );
+        },
+      );
+    }
+
+    return Container(
+      height: 108,
+      decoration: BoxDecoration(
+        color: isDark
+            ? colorScheme.surfaceContainerHigh
+            : AppColors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.secondary.withValues(alpha: 0.35)
+              : AppColors.secondary.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8.5),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            content,
+            Positioned(
+              bottom: 5,
+              left: 5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? colorScheme.secondary
+                            : AppColors.secondary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Pathology Reference',
+                      style: AppTypography.labelUi.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 9,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPathologyFallback(String condition) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+    return Container(
+      color: isDark
+          ? colorScheme.surfaceContainerHighest
+          : const Color(0xFF0F2E22),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.biotech,
+              size: 34,
+              color: isDark
+                  ? colorScheme.secondary
+                  : AppColors.secondary,
+            ),
+            const SizedBox(height: 3),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                condition,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.labelUi.copyWith(
+                  color: Colors.white70,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final plantsAsync = ref.watch(plantListNotifierProvider);
     final wandState = ref.watch(floraWandNotifierProvider);
+    final isCelsius = ref.watch(isCelsiusMetricProvider);
     final telemetry = wandState.telemetry;
     final allPlants = plantsAsync.value ?? const <PlantModel>[];
 
@@ -138,9 +624,17 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
             : null);
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: isDark
+            ? Border(
+                top: BorderSide(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+              )
+            : null,
       ),
       child: SafeArea(
         top: false,
@@ -154,65 +648,52 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
+                  color: isDark
+                      ? colorScheme.outlineVariant.withValues(alpha: 0.6)
+                      : AppColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
 
-            // Top Telemetry & Edge AI Sync Bar
+            // Top Status Bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: AppColors.surfaceContainerLow,
+              color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.secondary,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'IoT Wand Linked • ${widget.result.inferenceLatencyMs}ms Local ONNX',
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.labelUi.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      wandState.isConnected ? 'IoT Wand Linked' : 'IoT Wand Offline',
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelUi.copyWith(
+                        color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppColors.secondaryContainer,
+                      color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.check_circle,
-                          size: 13,
-                          color: AppColors.onSecondaryContainer,
+                        Icon(
+                          Icons.verified_outlined,
+                          size: 11,
+                          color: isDark ? colorScheme.primary : AppColors.primary,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'STEP 5 OF 5',
+                          'Scan Verified',
                           style: AppTypography.labelUi.copyWith(
-                            color: AppColors.onSecondaryContainer,
-                            fontWeight: FontWeight.w700,
+                            color: isDark ? colorScheme.onSurface : AppColors.onSurface,
+                            fontWeight: FontWeight.w600,
                             fontSize: 10,
                           ),
                         ),
@@ -233,15 +714,22 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(14),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x06000000),
-                            blurRadius: 6,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
+                        border: isDark
+                            ? Border.all(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                              )
+                            : null,
+                        boxShadow: isDark
+                            ? null
+                            : const [
+                                BoxShadow(
+                                  color: Color(0x06000000),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -253,12 +741,12 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: AppColors.surfaceContainer,
+                                    color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainer,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.yard,
-                                    color: AppColors.primary,
+                                    color: isDark ? colorScheme.primary : AppColors.primary,
                                     size: 22,
                                   ),
                                 ),
@@ -272,16 +760,16 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                           Text(
                                             'CROP CONFIRMED',
                                             style: AppTypography.labelUi.copyWith(
-                                              color: AppColors.secondary,
+                                              color: isDark ? colorScheme.secondary : AppColors.secondary,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 9,
                                             ),
                                           ),
                                           const SizedBox(width: 4),
-                                          const Icon(
+                                          Icon(
                                             Icons.verified,
                                             size: 13,
-                                            color: AppColors.secondary,
+                                            color: isDark ? colorScheme.secondary : AppColors.secondary,
                                           ),
                                         ],
                                       ),
@@ -296,7 +784,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                         style: AppTypography.headlineSmall.copyWith(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14,
-                                          color: AppColors.onSurface,
+                                          color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                         ),
                                       ),
                                     ],
@@ -306,7 +794,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.tune, color: AppColors.onSurfaceVariant),
+                            icon: Icon(
+                              Icons.tune,
+                              color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                            ),
                             onPressed: () {},
                           ),
                         ],
@@ -319,15 +810,22 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x0A000000),
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
+                        border: isDark
+                            ? Border.all(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                              )
+                            : null,
+                        boxShadow: isDark
+                            ? null
+                            : const [
+                                BoxShadow(
+                                  color: Color(0x0A000000),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,16 +837,18 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: AppColors.errorContainer,
+                                    color: isDark
+                                        ? colorScheme.errorContainer.withValues(alpha: 0.35)
+                                        : AppColors.errorContainer,
                                     borderRadius: BorderRadius.circular(9999),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(
+                                      Icon(
                                         Icons.warning,
                                         size: 13,
-                                        color: AppColors.onErrorContainer,
+                                        color: isDark ? colorScheme.error : AppColors.onErrorContainer,
                                       ),
                                       const SizedBox(width: 4),
                                       Flexible(
@@ -356,7 +856,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                           'Dual Action Required',
                                           overflow: TextOverflow.ellipsis,
                                           style: AppTypography.labelUi.copyWith(
-                                            color: AppColors.onErrorContainer,
+                                            color: isDark ? colorScheme.error : AppColors.onErrorContainer,
                                             fontWeight: FontWeight.w800,
                                             fontSize: 10,
                                           ),
@@ -367,18 +867,34 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: BorderRadius.circular(9999),
-                                ),
-                                child: Text(
-                                  'High Confidence',
-                                  style: AppTypography.telemetrySmall.copyWith(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.onSurface,
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _confidenceBgColor(widget.result.confidencePercentage),
+                                    borderRadius: BorderRadius.circular(9999),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.auto_awesome,
+                                        size: 11,
+                                        color: _confidenceTextColor(widget.result.confidencePercentage),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          '${widget.result.confidencePercentage.toStringAsFixed(1)}% AI Confidence',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppTypography.telemetrySmall.copyWith(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: _confidenceTextColor(widget.result.confidencePercentage),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -390,15 +906,15 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             style: AppTypography.headlineSmall.copyWith(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
-                              color: AppColors.onSurface,
+                              color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                               height: 1.2,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            _resolveMasterVerdictDescription(widget.result, telemetry, activePlant),
+                            _resolveMasterVerdictDescription(widget.result, telemetry, activePlant, isCelsius: isCelsius),
                             style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.onSurfaceVariant,
+                              color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                               fontSize: 13,
                               height: 1.35,
                             ),
@@ -409,15 +925,15 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerLow,
+                              color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
                               children: [
-                                const SproutlyMascot(
+                                SproutlyMascot(
                                   size: 46,
                                   badgeEmoji: '🌿',
-                                  badgeColor: AppColors.secondary,
+                                  badgeColor: isDark ? colorScheme.primary : AppColors.secondary,
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -429,14 +945,14 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                         style: AppTypography.headlineSmall.copyWith(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 13,
-                                          color: AppColors.primary,
+                                          color: isDark ? colorScheme.primary : AppColors.primary,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         'Follow the 3 quick steps below to keep your balcony Roma thriving.',
                                         style: AppTypography.bodySmall.copyWith(
-                                          color: AppColors.onSurfaceVariant,
+                                          color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                           fontSize: 11,
                                         ),
                                       ),
@@ -463,15 +979,15 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             style: AppTypography.headlineSmall.copyWith(
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
-                              color: AppColors.onSurface,
+                              color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'RETICLE ANALYSIS',
+                          'Reticle Analysis',
                           style: AppTypography.labelUi.copyWith(
-                            color: AppColors.onSurfaceVariant,
+                            color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                             fontSize: 10,
                           ),
                         ),
@@ -480,69 +996,47 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     const SizedBox(height: 8),
 
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left: Captured Leaf
+                        // Left: Captured Leaf Frame
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerLowest,
+                              color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                               borderRadius: BorderRadius.circular(12),
+                              border: isDark
+                                  ? Border.all(
+                                      color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                                    )
+                                  : null,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  height: 100,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      Center(
-                                        child: Icon(
-                                          Icons.center_focus_strong,
-                                          size: 44,
-                                          color: AppColors.error.withValues(alpha: 0.7),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 4,
-                                        left: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.inverseSurface.withValues(alpha: 0.85),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'Live Scan',
-                                            style: AppTypography.labelUi.copyWith(
-                                              color: AppColors.inverseOnSurface,
-                                              fontSize: 8,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
+                                _buildCapturedLeafFrame(),
+                                const SizedBox(height: 7),
                                 Text(
                                   'Your Captured Leaf',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySmall.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.onSurface,
+                                    fontSize: 12,
+                                    color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                   ),
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
                                   widget.result.symptoms.isNotEmpty
                                       ? widget.result.symptoms.first
-                                      : 'Visual lesions confirmed on leaf canopy',
+                                      : 'Visual inspection frame',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySmall.copyWith(
                                     fontSize: 10,
-                                    color: AppColors.onSurfaceVariant,
+                                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                                    height: 1.25,
                                   ),
                                 ),
                               ],
@@ -551,67 +1045,44 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                         ),
                         const SizedBox(width: 10),
 
-                        // Right: Reference Catalog
+                        // Right: Visual Picture of Diagnosed Illness
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerLowest,
+                              color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                               borderRadius: BorderRadius.circular(12),
+                              border: isDark
+                                  ? Border.all(
+                                      color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                                    )
+                                  : null,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  height: 100,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceContainer,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Stack(
-                                    children: [
-                                      const Center(
-                                        child: Icon(
-                                          Icons.biotech,
-                                          size: 44,
-                                          color: AppColors.secondary,
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 4,
-                                        left: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.inverseSurface.withValues(alpha: 0.85),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'FloraScan Base',
-                                            style: AppTypography.labelUi.copyWith(
-                                              color: AppColors.inverseOnSurface,
-                                              fontSize: 8,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
+                                _buildDiagnosedIllnessPicture(),
+                                const SizedBox(height: 7),
                                 Text(
                                   widget.result.detectedCondition.split('&').first.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySmall.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.onSurface,
+                                    fontSize: 12,
+                                    color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                   ),
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
                                   widget.result.scientificPathogen,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodySmall.copyWith(
                                     fontSize: 10,
                                     fontStyle: FontStyle.italic,
-                                    color: AppColors.onSurfaceVariant,
+                                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                                    height: 1.25,
                                   ),
                                 ),
                               ],
@@ -637,7 +1108,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 style: AppTypography.headlineSmall.copyWith(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
-                                  color: AppColors.onSurface,
+                                  color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                 ),
                               ),
                               Text(
@@ -647,7 +1118,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodySmall.copyWith(
                                   fontSize: 11,
-                                  color: AppColors.onSurfaceVariant,
+                                  color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -661,7 +1132,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.secondaryContainer,
+                                  color: isDark
+                                      ? colorScheme.secondaryContainer.withValues(alpha: 0.35)
+                                      : AppColors.secondaryContainer,
                                   borderRadius: BorderRadius.circular(9999),
                                 ),
                                 child: Text(
@@ -669,7 +1142,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   style: AppTypography.labelUi.copyWith(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.onSecondaryContainer,
+                                    color: isDark
+                                        ? colorScheme.secondary
+                                        : AppColors.onSecondaryContainer,
                                   ),
                                 ),
                               ),
@@ -677,7 +1152,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             ],
                             Icon(
                               Icons.sensors,
-                              color: wandState.isConnected ? AppColors.secondary : AppColors.outline,
+                              color: wandState.isConnected
+                                  ? (isDark ? colorScheme.secondary : AppColors.secondary)
+                                  : (isDark ? colorScheme.outline : AppColors.outline),
                               size: 20,
                             ),
                           ],
@@ -712,8 +1189,8 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     _buildWandSensorCard(
                       title: 'Air Temperature',
                       icon: Icons.thermostat,
-                      value: telemetry.formattedTemperature,
-                      target: 'Target: 20–30°C',
+                      value: telemetry.formatTemperature(isCelsius: isCelsius),
+                      target: isCelsius ? 'Target: 20–30°C' : 'Target: 68–86°F',
                       statusTag: telemetry.temperatureTag,
                       isError: telemetry.isTemperatureWarning,
                       summary: telemetry.temperatureCelsius > 32
@@ -724,7 +1201,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       isExpanded: _showWhyTemp,
                       onToggleWhy: () => setState(() => _showWhyTemp = !_showWhyTemp),
                       whyText:
-                          'Why Temperature Matters: ${activePlant?.name ?? targetCropCategory} plants metabolize carbohydrates efficiently between 20°C and 30°C. Current reading of ${telemetry.formattedTemperature} (${telemetry.temperatureTag}) directly impacts cellular repair during foliar defense.',
+                          'Why Temperature Matters: ${activePlant?.name ?? targetCropCategory} plants metabolize carbohydrates efficiently between ${isCelsius ? "20°C and 30°C" : "68°F and 86°F"}. Current reading of ${telemetry.formatTemperature(isCelsius: isCelsius)} (${telemetry.temperatureTag}) directly impacts cellular repair during foliar defense.',
                     ),
                     const SizedBox(height: 8),
 
@@ -782,21 +1259,25 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 style: AppTypography.headlineSmall.copyWith(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
-                                  color: AppColors.onSurface,
+                                  color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                 ),
                               ),
                               Text(
                                 'Prioritized checklist in strict order',
                                 style: AppTypography.bodySmall.copyWith(
                                   fontSize: 11,
-                                  color: AppColors.onSurfaceVariant,
+                                  color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                 ),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Icon(Icons.checklist, color: AppColors.primary, size: 22),
+                        Icon(
+                          Icons.checklist,
+                          color: isDark ? colorScheme.primary : AppColors.primary,
+                          size: 22,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -805,8 +1286,13 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(14),
+                        border: isDark
+                            ? Border.all(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                              )
+                            : null,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -816,15 +1302,15 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               Container(
                                 width: 22,
                                 height: 22,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppColors.primary,
+                                  color: isDark ? colorScheme.primary : AppColors.primary,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '1',
                                     style: AppTypography.labelUi.copyWith(
-                                      color: AppColors.onPrimary,
+                                      color: isDark ? colorScheme.onPrimary : AppColors.onPrimary,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -833,11 +1319,11 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'SIMPLE FIXES FIRST',
+                                  'Simple Fixes First',
                                   style: AppTypography.headlineSmall.copyWith(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.primary,
+                                    color: isDark ? colorScheme.primary : AppColors.primary,
                                   ),
                                 ),
                               ),
@@ -872,8 +1358,13 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(14),
+                        border: isDark
+                            ? Border.all(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                              )
+                            : null,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -883,15 +1374,15 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               Container(
                                 width: 22,
                                 height: 22,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppColors.secondary,
+                                  color: isDark ? colorScheme.secondary : AppColors.secondary,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '2',
                                     style: AppTypography.labelUi.copyWith(
-                                      color: AppColors.onSecondary,
+                                      color: isDark ? colorScheme.onSecondary : AppColors.onSecondary,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -904,7 +1395,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   style: AppTypography.headlineSmall.copyWith(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.secondary,
+                                    color: isDark ? colorScheme.secondary : AppColors.secondary,
                                   ),
                                 ),
                               ),
@@ -914,7 +1405,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerLow,
+                              color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -922,7 +1413,11 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.science, color: AppColors.secondary, size: 16),
+                                    Icon(
+                                      Icons.science,
+                                      color: isDark ? colorScheme.secondary : AppColors.secondary,
+                                      size: 16,
+                                    ),
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
@@ -930,6 +1425,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                         style: AppTypography.bodyMedium.copyWith(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 13,
+                                          color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                         ),
                                       ),
                                     ),
@@ -938,7 +1434,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Mix 1 tbsp baking soda + 1 tsp mild liquid soap into 1 liter water. Spray tops and bottoms of remaining leaves tomorrow morning.',
-                                  style: AppTypography.bodySmall.copyWith(fontSize: 12),
+                                  style: AppTypography.bodySmall.copyWith(
+                                    fontSize: 12,
+                                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                                  ),
                                 ),
                               ],
                             ),
@@ -947,7 +1446,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceContainerLow,
+                              color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -955,7 +1454,11 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.eco, color: AppColors.secondary, size: 16),
+                                    Icon(
+                                      Icons.eco,
+                                      color: isDark ? colorScheme.secondary : AppColors.secondary,
+                                      size: 16,
+                                    ),
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
@@ -963,6 +1466,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                         style: AppTypography.bodyMedium.copyWith(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 13,
+                                          color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                         ),
                                       ),
                                     ),
@@ -971,7 +1475,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Apply once every 7 days as a natural shield to suppress fungal spore germination.',
-                                  style: AppTypography.bodySmall.copyWith(fontSize: 12),
+                                  style: AppTypography.bodySmall.copyWith(
+                                    fontSize: 12,
+                                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                                  ),
                                 ),
                               ],
                             ),
@@ -986,8 +1493,13 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(14),
+                        border: isDark
+                            ? Border.all(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                              )
+                            : null,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -997,15 +1509,15 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               Container(
                                 width: 22,
                                 height: 22,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppColors.error,
+                                  color: isDark ? colorScheme.error : AppColors.error,
                                 ),
                                 child: Center(
                                   child: Text(
                                     '3',
                                     style: AppTypography.labelUi.copyWith(
-                                      color: AppColors.onError,
+                                      color: isDark ? colorScheme.onError : AppColors.onError,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -1018,7 +1530,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   style: AppTypography.headlineSmall.copyWith(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.error,
+                                    color: isDark ? colorScheme.error : AppColors.error,
                                   ),
                                 ),
                               ),
@@ -1028,7 +1540,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.errorContainer.withValues(alpha: 0.35),
+                              color: isDark
+                                  ? colorScheme.errorContainer.withValues(alpha: 0.25)
+                                  : AppColors.errorContainer.withValues(alpha: 0.35),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -1039,12 +1553,16 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   style: AppTypography.bodyMedium.copyWith(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13,
+                                    color: isDark ? colorScheme.error : AppColors.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Use only if spots keep spreading after 1 week of drying and organic spray.',
-                                  style: AppTypography.bodySmall.copyWith(fontSize: 12),
+                                  style: AppTypography.bodySmall.copyWith(
+                                    fontSize: 12,
+                                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1059,9 +1577,13 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerLowest,
+                        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.surfaceContainerHigh),
+                        border: Border.all(
+                          color: isDark
+                              ? colorScheme.outlineVariant.withValues(alpha: 0.25)
+                              : AppColors.surfaceContainerHigh,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1071,12 +1593,16 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.yard_outlined, size: 16, color: AppColors.primary),
+                                  Icon(
+                                    Icons.yard_outlined,
+                                    size: 16,
+                                    color: isDark ? colorScheme.primary : AppColors.primary,
+                                  ),
                                   const SizedBox(width: 6),
                                   Text(
                                     'TARGET PLANT PLOT',
                                     style: AppTypography.labelUi.copyWith(
-                                      color: AppColors.onSurfaceVariant,
+                                      color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: 0.8,
@@ -1093,7 +1619,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                     minimumSize: const Size(0, 26),
                                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    foregroundColor: AppColors.primary,
+                                    foregroundColor: isDark ? colorScheme.primary : AppColors.primary,
                                     textStyle: AppTypography.labelUi.copyWith(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 11,
@@ -1110,7 +1636,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                               child: Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerLow,
+                                  color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Row(
@@ -1119,7 +1645,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                       width: 36,
                                       height: 36,
                                       decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: 0.12),
+                                        color: isDark
+                                            ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+                                            : AppColors.primary.withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
@@ -1129,7 +1657,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                                 ? Icons.spa
                                                 : Icons.eco),
                                         size: 20,
-                                        color: AppColors.primary,
+                                        color: isDark ? colorScheme.primary : AppColors.primary,
                                       ),
                                     ),
                                     const SizedBox(width: 10),
@@ -1142,7 +1670,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                             style: AppTypography.bodyMedium.copyWith(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 13,
-                                              color: AppColors.onSurface,
+                                              color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -1153,7 +1681,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                                 : '${_resolveCrop(activePlant)} Plot',
                                             style: AppTypography.bodySmall.copyWith(
                                               fontSize: 11,
-                                              color: AppColors.onSurfaceVariant,
+                                              color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -1165,10 +1693,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: activePlant.healthStatus == PlantHealthStatus.healthy
-                                            ? AppColors.secondaryContainer
+                                            ? (isDark ? colorScheme.secondaryContainer.withValues(alpha: 0.35) : AppColors.secondaryContainer)
                                             : (activePlant.healthStatus == PlantHealthStatus.caution
-                                                ? AppColors.tertiaryContainer
-                                                : AppColors.errorContainer),
+                                                ? (isDark ? colorScheme.tertiaryContainer.withValues(alpha: 0.35) : AppColors.tertiaryContainer)
+                                                : (isDark ? colorScheme.errorContainer.withValues(alpha: 0.35) : AppColors.errorContainer)),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -1177,10 +1705,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                           fontSize: 9,
                                           fontWeight: FontWeight.w800,
                                           color: activePlant.healthStatus == PlantHealthStatus.healthy
-                                              ? AppColors.onSecondaryContainer
+                                              ? (isDark ? colorScheme.secondary : AppColors.onSecondaryContainer)
                                               : (activePlant.healthStatus == PlantHealthStatus.caution
-                                                  ? AppColors.onTertiaryContainer
-                                                  : AppColors.onErrorContainer),
+                                                  ? (isDark ? colorScheme.tertiary : AppColors.onTertiaryContainer)
+                                                  : (isDark ? colorScheme.error : AppColors.onErrorContainer)),
                                         ),
                                       ),
                                     ),
@@ -1192,19 +1720,23 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             Container(
                               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceContainerLow,
+                                color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.info_outline, size: 16, color: AppColors.onSurfaceVariant),
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       'No registered plants found. Add plants in My Plants first to save scan diagnostics.',
                                       style: AppTypography.bodySmall.copyWith(
                                         fontSize: 11,
-                                        color: AppColors.onSurfaceVariant,
+                                        color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                       ),
                                     ),
                                   ),
@@ -1256,7 +1788,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                                   SnackBar(
                                     content: Text('Updated diagnostics for "${updated.name}"! Status: ${newStatus.name.toUpperCase()}.'),
                                     behavior: SnackBarBehavior.floating,
-                                    backgroundColor: AppColors.primary,
+                                    backgroundColor: isDark ? colorScheme.primary : AppColors.primary,
                                   ),
                                 );
                                 widget.onDismiss();
@@ -1271,8 +1803,8 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                       ),
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.onPrimary,
+                        backgroundColor: isDark ? colorScheme.primary : AppColors.primary,
+                        foregroundColor: isDark ? colorScheme.onPrimary : AppColors.onPrimary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
@@ -1325,9 +1857,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(horizontal: 6),
                               minimumSize: const Size.fromHeight(46),
-                              backgroundColor: AppColors.surfaceContainerHigh,
-                              foregroundColor: AppColors.onSurface,
-                              side: BorderSide.none,
+                              backgroundColor: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
+                              foregroundColor: isDark ? colorScheme.onSurface : AppColors.onSurface,
+                              side: isDark ? BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.25)) : BorderSide.none,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
@@ -1344,9 +1876,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(horizontal: 6),
                               minimumSize: const Size.fromHeight(46),
-                              backgroundColor: AppColors.surfaceContainerHigh,
-                              foregroundColor: AppColors.onSurface,
-                              side: BorderSide.none,
+                              backgroundColor: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
+                              foregroundColor: isDark ? colorScheme.onSurface : AppColors.onSurface,
+                              side: isDark ? BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.25)) : BorderSide.none,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
@@ -1375,11 +1907,20 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
     required VoidCallback onToggleWhy,
     required String whyText,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isError
+              ? (isDark ? colorScheme.error.withValues(alpha: 0.4) : AppColors.errorContainer)
+              : (isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : AppColors.surfaceContainerHigh),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1390,7 +1931,13 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
               Expanded(
                 child: Row(
                   children: [
-                    Icon(icon, size: 16, color: isError ? AppColors.error : AppColors.secondary),
+                    Icon(
+                      icon,
+                      size: 16,
+                      color: isError
+                          ? (isDark ? colorScheme.error : AppColors.error)
+                          : (isDark ? colorScheme.secondary : AppColors.secondary),
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -1399,6 +1946,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                         style: AppTypography.bodyMedium.copyWith(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
+                          color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                         ),
                       ),
                     ),
@@ -1412,13 +1960,17 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: isError ? AppColors.errorContainer : AppColors.secondaryContainer,
+                      color: isError
+                          ? (isDark ? colorScheme.errorContainer.withValues(alpha: 0.35) : AppColors.errorContainer)
+                          : (isDark ? colorScheme.secondaryContainer.withValues(alpha: 0.35) : AppColors.secondaryContainer),
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Text(
                       statusTag,
                       style: AppTypography.labelUi.copyWith(
-                        color: isError ? AppColors.onErrorContainer : AppColors.onSecondaryContainer,
+                        color: isError
+                            ? (isDark ? colorScheme.error : AppColors.onErrorContainer)
+                            : (isDark ? colorScheme.secondary : AppColors.onSecondaryContainer),
                         fontWeight: FontWeight.w700,
                         fontSize: 9,
                       ),
@@ -1431,7 +1983,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerHigh,
+                        color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Row(
@@ -1440,13 +1992,13 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                             'Why?',
                             style: AppTypography.labelUi.copyWith(
                               fontSize: 9,
-                              color: AppColors.onSurface,
+                              color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                             ),
                           ),
                           Icon(
                             isExpanded ? Icons.expand_less : Icons.expand_more,
                             size: 14,
-                            color: AppColors.onSurface,
+                            color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                           ),
                         ],
                       ),
@@ -1464,6 +2016,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                 style: AppTypography.telemetryLarge.copyWith(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
+                  color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1472,7 +2025,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                   target,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                     fontSize: 11,
                   ),
                 ),
@@ -1483,7 +2036,9 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
           Text(
             summary,
             style: AppTypography.bodySmall.copyWith(
-              color: isError ? AppColors.error : AppColors.secondary,
+              color: isError
+                  ? (isDark ? colorScheme.error : AppColors.error)
+                  : (isDark ? colorScheme.secondary : AppColors.secondary),
               fontWeight: FontWeight.w600,
               fontSize: 11,
             ),
@@ -1493,14 +2048,14 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLow,
+                color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 whyText,
                 style: AppTypography.bodySmall.copyWith(
                   fontSize: 11,
-                  color: AppColors.onSurface,
+                  color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                   height: 1.3,
                 ),
               ),
@@ -1517,6 +2072,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
     required String subtitle,
     required ValueChanged<bool?> onChanged,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return InkWell(
       onTap: () => onChanged(!value),
       borderRadius: BorderRadius.circular(8),
@@ -1530,7 +2089,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
               height: 24,
               child: Checkbox(
                 value: value,
-                activeColor: AppColors.primary,
+                activeColor: isDark ? colorScheme.primary : AppColors.primary,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 onChanged: onChanged,
               ),
@@ -1545,6 +2104,10 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     style: AppTypography.bodyMedium.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
+                      color: value
+                          ? (isDark ? colorScheme.onSurfaceVariant.withValues(alpha: 0.6) : AppColors.onSurfaceVariant.withValues(alpha: 0.6))
+                          : (isDark ? colorScheme.onSurface : AppColors.onSurface),
+                      decoration: value ? TextDecoration.lineThrough : null,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1552,7 +2115,7 @@ class _DiagnosisResultSheetState extends ConsumerState<DiagnosisResultSheet> {
                     subtitle,
                     style: AppTypography.bodySmall.copyWith(
                       fontSize: 11,
-                      color: AppColors.onSurfaceVariant,
+                      color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -1617,6 +2180,10 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final query = _searchController.text.trim().toLowerCase();
     final filtered = widget.plants.where((p) {
       final cropMatch = _selectedCropFilter == 'All' ||
@@ -1636,9 +2203,17 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.8,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: isDark
+            ? Border(
+                top: BorderSide(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.25),
+                  width: 1,
+                ),
+              )
+            : null,
       ),
       child: SafeArea(
         top: false,
@@ -1652,7 +2227,9 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.outlineVariant,
+                  color: isDark
+                      ? colorScheme.outlineVariant.withValues(alpha: 0.6)
+                      : AppColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1672,20 +2249,24 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                         style: AppTypography.headlineSmall.copyWith(
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
-                          color: AppColors.onSurface,
+                          color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                         ),
                       ),
                       Text(
                         'Filter by category or search by crop name',
                         style: AppTypography.bodySmall.copyWith(
                           fontSize: 11,
-                          color: AppColors.onSurfaceVariant,
+                          color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 20),
+                    icon: Icon(
+                      Icons.close,
+                      size: 20,
+                      color: isDark ? colorScheme.onSurfaceVariant : null,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -1699,13 +2280,24 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
                 controller: _searchController,
+                style: isDark ? TextStyle(color: colorScheme.onSurface) : null,
                 decoration: InputDecoration(
                   hintText: 'Search plant by title or variety...',
-                  hintStyle: AppTypography.bodySmall.copyWith(color: AppColors.onSurfaceVariant),
-                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.primary),
+                  hintStyle: AppTypography.bodySmall.copyWith(
+                    color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 20,
+                    color: isDark ? colorScheme.primary : AppColors.primary,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
+                          icon: Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: isDark ? colorScheme.onSurfaceVariant : null,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {});
@@ -1713,11 +2305,19 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                         )
                       : null,
                   filled: true,
-                  fillColor: AppColors.surfaceContainerLow,
+                  fillColor: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                    borderSide: isDark
+                        ? BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.25))
+                        : BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: isDark
+                        ? BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.25))
+                        : BorderSide.none,
                   ),
                 ),
                 onChanged: (_) => setState(() {}),
@@ -1744,7 +2344,12 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
             ),
 
             const SizedBox(height: 12),
-            const Divider(height: 1, color: AppColors.surfaceContainerHigh),
+            Divider(
+              height: 1,
+              color: isDark
+                  ? colorScheme.outlineVariant.withValues(alpha: 0.25)
+                  : AppColors.surfaceContainerHigh,
+            ),
 
             // Filtered Plant List
             Flexible(
@@ -1754,13 +2359,17 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.yard_outlined, size: 36, color: AppColors.onSurfaceVariant.withValues(alpha: 0.5)),
+                          Icon(
+                            Icons.yard_outlined,
+                            size: 36,
+                            color: (isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant).withValues(alpha: 0.5),
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'No matching plants found',
                             style: AppTypography.bodyMedium.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: AppColors.onSurface,
+                              color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -1769,7 +2378,7 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                             textAlign: TextAlign.center,
                             style: AppTypography.bodySmall.copyWith(
                               fontSize: 11,
-                              color: AppColors.onSurfaceVariant,
+                              color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -1790,13 +2399,13 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? AppColors.primaryContainer.withValues(alpha: 0.25)
-                                  : AppColors.surfaceContainerLowest,
+                                  ? (isDark ? colorScheme.primaryContainer.withValues(alpha: 0.3) : AppColors.primaryContainer.withValues(alpha: 0.25))
+                                  : (isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLowest),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.surfaceContainerHigh,
+                                    ? (isDark ? colorScheme.primary : AppColors.primary)
+                                    : (isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : AppColors.surfaceContainerHigh),
                                 width: isSelected ? 1.5 : 1.0,
                               ),
                             ),
@@ -1807,8 +2416,8 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                                   height: 40,
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? AppColors.primary
-                                        : AppColors.surfaceContainer,
+                                        ? (isDark ? colorScheme.primary : AppColors.primary)
+                                        : (isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainer),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(
@@ -1819,8 +2428,8 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                                             : Icons.eco),
                                     size: 22,
                                     color: isSelected
-                                        ? AppColors.onPrimary
-                                        : AppColors.primary,
+                                        ? (isDark ? colorScheme.onPrimary : AppColors.onPrimary)
+                                        : (isDark ? colorScheme.primary : AppColors.primary),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -1833,7 +2442,7 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                                         style: AppTypography.bodyMedium.copyWith(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14,
-                                          color: AppColors.onSurface,
+                                          color: isDark ? colorScheme.onSurface : AppColors.onSurface,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -1845,7 +2454,7 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                                             : '${_resolveCrop(plant)} Plot',
                                         style: AppTypography.bodySmall.copyWith(
                                           fontSize: 11,
-                                          color: AppColors.onSurfaceVariant,
+                                          color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -1858,11 +2467,11 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: plant.healthStatus == PlantHealthStatus.healthy
-                                        ? AppColors.secondaryContainer
+                                        ? (isDark ? colorScheme.secondaryContainer.withValues(alpha: 0.35) : AppColors.secondaryContainer)
                                         : (plant.healthStatus == PlantHealthStatus.caution
-                                            ? AppColors.tertiaryContainer
-                                            : AppColors.errorContainer),
-                                    borderRadius: BorderRadius.circular(6),
+                                            ? (isDark ? colorScheme.tertiaryContainer.withValues(alpha: 0.35) : AppColors.tertiaryContainer)
+                                            : (isDark ? colorScheme.errorContainer.withValues(alpha: 0.35) : AppColors.errorContainer)),
+                                        borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     plant.healthStatus.name.toUpperCase(),
@@ -1870,16 +2479,20 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
                                       fontSize: 9,
                                       fontWeight: FontWeight.w800,
                                       color: plant.healthStatus == PlantHealthStatus.healthy
-                                          ? AppColors.onSecondaryContainer
+                                          ? (isDark ? colorScheme.secondary : AppColors.onSecondaryContainer)
                                           : (plant.healthStatus == PlantHealthStatus.caution
-                                              ? AppColors.onTertiaryContainer
-                                              : AppColors.onErrorContainer),
+                                              ? (isDark ? colorScheme.tertiary : AppColors.onTertiaryContainer)
+                                              : (isDark ? colorScheme.error : AppColors.onErrorContainer)),
                                     ),
                                   ),
                                 ),
                                 if (isSelected) ...[
                                   const SizedBox(width: 8),
-                                  const Icon(Icons.check_circle, color: AppColors.primary, size: 20),
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: isDark ? colorScheme.primary : AppColors.primary,
+                                    size: 20,
+                                  ),
                                 ],
                               ],
                             ),
@@ -1895,6 +2508,10 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
   }
 
   Widget _buildCategoryChip(String category, String label) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final isSelected = _selectedCropFilter.toLowerCase() == category.toLowerCase();
     return InkWell(
       onTap: () => setState(() => _selectedCropFilter = category),
@@ -1902,16 +2519,22 @@ class _PlantSearchPickerSheetState extends State<_PlantSearchPickerSheet> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surfaceContainerLow,
+          color: isSelected
+              ? (isDark ? colorScheme.primary : AppColors.primary)
+              : (isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.outlineVariant,
+            color: isSelected
+                ? (isDark ? colorScheme.primary : AppColors.primary)
+                : (isDark ? colorScheme.outlineVariant.withValues(alpha: 0.35) : AppColors.outlineVariant),
           ),
         ),
         child: Text(
           label,
           style: AppTypography.labelUi.copyWith(
-            color: isSelected ? AppColors.onPrimary : AppColors.onSurfaceVariant,
+            color: isSelected
+                ? (isDark ? colorScheme.onPrimary : AppColors.onPrimary)
+                : (isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant),
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 11,
           ),
