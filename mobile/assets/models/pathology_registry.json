@@ -14,7 +14,8 @@
       ],
       "organicTreatment": "Maintain regular foliar compost tea and balanced organic nutrition.",
       "chemicalTreatment": "None required.",
-      "preventativeAction": "Routine crop scouting and drip irrigation to maintain ideal root-zone moisture."
+      "preventativeAction": "Routine crop scouting and drip irrigation to maintain ideal root-zone moisture.",
+      "referenceImage": "assets/pathology_reference/eggplant_healthy.jpg"
     },
     {
       "index": 1,
@@ -30,7 +31,8 @@
       ],
       "organicTreatment": "Apply neem oil (0.5%) spray or pyrethrin-based botanical extract in early morning.",
       "chemicalTreatment": "Rotate targeted insecticides (e.g., chlorantraniliprole or spinosad per label instructions).",
-      "preventativeAction": "Deploy yellow sticky traps and pheromone traps across the field perimeter."
+      "preventativeAction": "Deploy yellow sticky traps and pheromone traps across the field perimeter.",
+      "referenceImage": "assets/pathology_reference/eggplant_insect_pest.jpg"
     },
     {
       "index": 2,
@@ -46,7 +48,8 @@
       ],
       "organicTreatment": "Copper hydroxide or copper octanoate protective spray; remove lower infected foliage.",
       "chemicalTreatment": "Apply preventative mancozeb or difenoconazole at first lesion onset.",
-      "preventativeAction": "Promote wide row spacing for canopy airflow; avoid overhead sprinkler irrigation."
+      "preventativeAction": "Promote wide row spacing for canopy airflow; avoid overhead sprinkler irrigation.",
+      "referenceImage": "assets/pathology_reference/eggplant_leaf_spot.jpg"
     },
     {
       "index": 3,
@@ -62,7 +65,8 @@
       ],
       "organicTreatment": "No curative treatment exists; rogue out and destroy severely infected plants immediately.",
       "chemicalTreatment": "Control vector aphid and thrip populations using systemic insecticide.",
-      "preventativeAction": "Disinfect tools with 10% trisodium phosphate; sanitize hands between plants."
+      "preventativeAction": "Disinfect tools with 10% trisodium phosphate; sanitize hands between plants.",
+      "referenceImage": "assets/pathology_reference/eggplant_mosaic_virus.jpg"
     },
     {
       "index": 4,
@@ -78,7 +82,8 @@
       ],
       "organicTreatment": "Uproot and burn diseased plants; spray botanical neem repellent against leafhoppers.",
       "chemicalTreatment": "Apply imidacloprid or dimethoate to suppress vector leafhopper populations.",
-      "preventativeAction": "Eradicate alternate weed hosts around the plot perimeter before planting."
+      "preventativeAction": "Eradicate alternate weed hosts around the plot perimeter before planting.",
+      "referenceImage": "assets/pathology_reference/eggplant_small_leaf.jpg"
     },
     {
       "index": 5,
@@ -94,7 +99,8 @@
       ],
       "organicTreatment": "Soil drench with antagonistic Trichoderma harzianum; prune infected branches.",
       "chemicalTreatment": "Apply preventative boscalid, cyprodinil, or iprodione during high humidity.",
-      "preventativeAction": "Practice 3-year non-host crop rotation; improve soil drainage and reduce plant density."
+      "preventativeAction": "Practice 3-year non-host crop rotation; improve soil drainage and reduce plant density.",
+      "referenceImage": "assets/pathology_reference/eggplant_white_mold.jpg"
     },
     {
       "index": 6,
@@ -110,7 +116,8 @@
       ],
       "organicTreatment": "Incorporate bio-fumigant mustard cover crops; rogue out wilted specimens immediately.",
       "chemicalTreatment": "No effective chemical curative; copper bactericides provide limited soil suppression.",
-      "preventativeAction": "Graft commercial varieties onto resistant rootstocks; maintain raised beds."
+      "preventativeAction": "Graft commercial varieties onto resistant rootstocks; maintain raised beds.",
+      "referenceImage": "assets/pathology_reference/eggplant_wilt.jpg"
     },
     {
       "index": 7,
@@ -126,7 +133,8 @@
       ],
       "organicTreatment": "Apply copper octanoate spray; remove and destroy lower infected leaves.",
       "chemicalTreatment": "Rotate preventative chlorothalonil or azoxystrobin fungicides per label intervals.",
-      "preventativeAction": "Utilize drip irrigation to avoid leaf wetness; mulch soil to halt spore splash."
+      "preventativeAction": "Utilize drip irrigation to avoid leaf wetness; mulch soil to halt spore splash.",
+      "referenceImage": "assets/pathology_reference/tomato_early_blight.jpg"
     },
     {
       "index": 8,
@@ -142,7 +150,8 @@
       ],
       "organicTreatment": "Immediate foliar copper sulfate application; destroy heavily infected crops.",
       "chemicalTreatment": "Apply systemic cymoxanil, mandipropamid, or metalaxyl upon first regional alert.",
-      "preventativeAction": "Scout aggressively during cool, foggy weather; destroy volunteer tomato cull piles."
+      "preventativeAction": "Scout aggressively during cool, foggy weather; destroy volunteer tomato cull piles.",
+      "referenceImage": "assets/pathology_reference/tomato_late_blight.jpg"
     },
     {
       "index": 9,
@@ -158,7 +167,8 @@
       ],
       "organicTreatment": "Bio-fungicidal Bacillus subtilis spray; strip bottom 12 inches of foliage.",
       "chemicalTreatment": "Apply chlorothalonil or mancozeb at 7 to 10 day intervals.",
-      "preventativeAction": "Avoid overhead watering; disinfect stakes and tomato cages between seasons."
+      "preventativeAction": "Avoid overhead watering; disinfect stakes and tomato cages between seasons.",
+      "referenceImage": "assets/pathology_reference/tomato_septoria_leaf_spot.jpg"
     },
     {
       "index": 10,
@@ -174,7 +184,8 @@
       ],
       "organicTreatment": "No viral cure; rogue infected plants; spray insecticidal soap or neem against whiteflies.",
       "chemicalTreatment": "Systemic neonicotinoids or cyantraniliprole targeting Bemisia tabaci vector.",
-      "preventativeAction": "Use insect-proof netting (50-mesh) on nurseries; use TYLCV-resistant hybrids."
+      "preventativeAction": "Use insect-proof netting (50-mesh) on nurseries; use TYLCV-resistant hybrids.",
+      "referenceImage": "assets/pathology_reference/tomato_yellow_leaf_curl.jpg"
     },
     {
       "index": 11,
@@ -190,7 +201,8 @@
       ],
       "organicTreatment": "Foliar sulfur dust or potassium bicarbonate spray; prune inner canopy for airflow.",
       "chemicalTreatment": "Apply preventative thiophanate-methyl or azoxystrobin fungicides.",
-      "preventativeAction": "Maintain relative humidity below 85% in greenhouse or polytunnel enclosures."
+      "preventativeAction": "Maintain relative humidity below 85% in greenhouse or polytunnel enclosures.",
+      "referenceImage": "assets/pathology_reference/tomato_mold_leaf.jpg"
     },
     {
       "index": 12,
@@ -206,7 +218,8 @@
       ],
       "organicTreatment": "Standard balanced organic fish hydrolysate or kelp foliar feed.",
       "chemicalTreatment": "None required.",
-      "preventativeAction": "Continue regular scouting and balanced nitrogen-potassium crop nutrition."
+      "preventativeAction": "Continue regular scouting and balanced nitrogen-potassium crop nutrition.",
+      "referenceImage": "assets/pathology_reference/tomato_healthy.jpg"
     },
     {
       "index": 13,
@@ -222,7 +235,8 @@
       ],
       "organicTreatment": "Neem oil foliar application; wettable sulfur in early morning hours.",
       "chemicalTreatment": "Mancozeb or pyraclostrobin application during early canopy and fruit development.",
-      "preventativeAction": "Use certified pathogen-free seeds; practice 3-year Solanaceae crop rotation."
+      "preventativeAction": "Use certified pathogen-free seeds; practice 3-year Solanaceae crop rotation.",
+      "referenceImage": "assets/pathology_reference/chili_anthracnose.jpg"
     },
     {
       "index": 14,
@@ -238,7 +252,8 @@
       ],
       "organicTreatment": "Copper bactericide (copper hydroxide) combined with biological Bacillus subtilis.",
       "chemicalTreatment": "Streptomycin sulfate tank-mix where locally registered for agricultural use.",
-      "preventativeAction": "Sanitize seed with hot-water treatment (50°C for 25 min); avoid handling wet plants."
+      "preventativeAction": "Sanitize seed with hot-water treatment (50\u00b0C for 25 min); avoid handling wet plants.",
+      "referenceImage": "assets/pathology_reference/chili_bacterial_spot.jpg"
     },
     {
       "index": 15,
@@ -254,7 +269,8 @@
       ],
       "organicTreatment": "Apply copper octanoate; remove fallen infected debris to lower inoculum.",
       "chemicalTreatment": "Apply chlorothalonil or carbendazim preventative sprays at 10-day intervals.",
-      "preventativeAction": "Maintain adequate spacing; mulch beds with rice straw or plastic film."
+      "preventativeAction": "Maintain adequate spacing; mulch beds with rice straw or plastic film.",
+      "referenceImage": "assets/pathology_reference/chili_cercospora_leaf_spot.jpg"
     },
     {
       "index": 16,
@@ -270,7 +286,8 @@
       ],
       "organicTreatment": "Rogue out symptomatic plants; spray mineral oil or neem to repel whiteflies and thrips.",
       "chemicalTreatment": "Imidacloprid or diafenthiuron applied to suppress vector whitefly populations.",
-      "preventativeAction": "Install silver reflective mulches; cultivate maize or sorghum border trap crops."
+      "preventativeAction": "Install silver reflective mulches; cultivate maize or sorghum border trap crops.",
+      "referenceImage": "assets/pathology_reference/chili_curl_virus.jpg"
     },
     {
       "index": 17,
@@ -286,7 +303,8 @@
       ],
       "organicTreatment": "Apply chelated iron or balanced foliar seaweed and fish amino acid extract.",
       "chemicalTreatment": "Foliar application of 19-19-19 water-soluble NPK fertilizer with micronutrients.",
-      "preventativeAction": "Conduct routine soil pH testing; maintain soil pH between 6.0 and 6.8."
+      "preventativeAction": "Conduct routine soil pH testing; maintain soil pH between 6.0 and 6.8.",
+      "referenceImage": "assets/pathology_reference/chili_nutrition_deficiency.jpg"
     },
     {
       "index": 18,
@@ -302,7 +320,8 @@
       ],
       "organicTreatment": "Protective copper fungicide spray; improve plant nutrition and vigor.",
       "chemicalTreatment": "Difenoconazole or tebuconazole spray at early disease detection.",
-      "preventativeAction": "Avoid overhead water splash; ensure good air movement through pruning."
+      "preventativeAction": "Avoid overhead water splash; ensure good air movement through pruning.",
+      "referenceImage": "assets/pathology_reference/chili_white_spot.jpg"
     },
     {
       "index": 19,
@@ -318,7 +337,8 @@
       ],
       "organicTreatment": "Routine foliar bio-stimulant or compost tea nourishment.",
       "chemicalTreatment": "None required.",
-      "preventativeAction": "Maintain balanced moisture schedule and periodic canopy scouting."
+      "preventativeAction": "Maintain balanced moisture schedule and periodic canopy scouting.",
+      "referenceImage": "assets/pathology_reference/chili_healthy.jpg"
     }
   ]
 }
