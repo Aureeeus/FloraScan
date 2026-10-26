@@ -28,8 +28,9 @@ class FloraScanApp extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       routerConfig: appRouter,
-      debugShowCheckedModeBanner: false,
+      debugShowCheckedModeBanner: false   
     );
   }
 }
+
 

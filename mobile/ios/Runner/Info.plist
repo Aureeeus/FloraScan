@@ -74,5 +74,9 @@
 	<string>FloraScan requires camera access to capture leaf images for plant disease diagnosis.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>FloraScan requires photo library access to select plant photos for disease diagnosis.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>FloraScan requires microphone access to enable voice search for plant guides, diseases, and terms.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>FloraScan uses speech recognition to convert your voice into search queries.</string>
 </dict>
 </plist>

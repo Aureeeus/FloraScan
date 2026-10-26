@@ -88,7 +88,7 @@ class _FloraScanHeaderState extends State<FloraScanHeader> {
                         Text(
                           widget.subtitle,
                           style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.onSurfaceVariant,
+                            color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
                             fontSize: 11,
                             height: 1.1,
                           ),
@@ -101,76 +101,57 @@ class _FloraScanHeaderState extends State<FloraScanHeader> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            // Right: Responsive Wand Status + Profile Avatar
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (MediaQuery.sizeOf(context).width > 420) ...[
-                  // Reactive wand status pill
-                  Consumer(
-                    builder: (context, ref, child) {
-                      final wandState = ref.watch(floraWandNotifierProvider);
-                      final isConnected = wandState.isConnected;
-                      final dotColor = isConnected
-                          ? AppColors.secondary
-                          : (wandState.isScanning ? AppColors.tertiary : AppColors.error);
-                      final text = isConnected
-                          ? 'Wand ${wandState.telemetry.batteryPercent}%'
-                          : (wandState.isScanning ? 'Wand...' : 'Wand Off');
+            // Right: Responsive Wand Status
+            if (MediaQuery.sizeOf(context).width > 420) ...[
+              const SizedBox(width: 8),
+              Consumer(
+                builder: (context, ref, child) {
+                  final wandState = ref.watch(floraWandNotifierProvider);
+                  final isConnected = wandState.isConnected;
+                  final dotColor = isConnected
+                      ? AppColors.secondary
+                      : (wandState.isScanning ? AppColors.tertiary : AppColors.error);
+                  final text = isConnected
+                      ? 'Wand ${wandState.telemetry.batteryPercent}%'
+                      : (wandState.isScanning ? 'Wand...' : 'Wand Off');
 
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(9999),
-                          border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: dotColor,
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              text,
-                              style: AppTypography.telemetrySmall.copyWith(
-                                color: AppColors.onSurfaceVariant,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                // Profile Avatar
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.secondaryContainer,
-                    border: Border.all(color: AppColors.secondaryFixedDim, width: 1.5),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '👨‍🌾',
-                      style: TextStyle(fontSize: 16),
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(9999),
+                      border: Border.all(
+                        color: isDark
+                            ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+                            : AppColors.outlineVariant.withValues(alpha: 0.3),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: dotColor,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          text,
+                          style: AppTypography.telemetrySmall.copyWith(
+                            color: isDark ? colorScheme.onSurfaceVariant : AppColors.onSurfaceVariant,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
           ],
         ),
       ),

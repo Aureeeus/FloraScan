@@ -15,9 +15,12 @@ dependencies:
   flutter_riverpod: ^3.4.3
   go_router: ^18.0.2
   google_fonts: ^8.2.1
+  image: ^4.12.0
   image_picker: ^1.2.4
+  onnxruntime: ^1.4.1
   path: ^1.9.1
   path_provider: ^2.1.6
+  speech_to_text: ^7.5.0
   sqflite: ^2.4.4+2
   sqflite_common_ffi: ^2.4.4
 
@@ -30,3 +33,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/models/
+    - assets/pathology_reference/

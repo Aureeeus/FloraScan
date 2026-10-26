@@ -9,52 +9,52 @@ import 'package:google_fonts/google_fonts.dart';
 /// - JetBrains Mono for jitter-free sensor and numeric telemetry readings.
 abstract final class AppTypography {
   // Headlines - Plus Jakarta Sans
-  static TextStyle get headlineXLarge => GoogleFonts.plusJakartaSans(
+  static final TextStyle headlineXLarge = GoogleFonts.plusJakartaSans(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         height: 40 / 32,
         letterSpacing: -0.64,
       );
 
-  static TextStyle get headlineLarge => GoogleFonts.plusJakartaSans(
+  static final TextStyle headlineLarge = GoogleFonts.plusJakartaSans(
         fontSize: 26,
         fontWeight: FontWeight.w700,
         height: 32 / 26,
         letterSpacing: -0.39,
       );
 
-  static TextStyle get headlineMedium => GoogleFonts.plusJakartaSans(
+  static final TextStyle headlineMedium = GoogleFonts.plusJakartaSans(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         height: 26 / 20,
       );
 
-  static TextStyle get headlineSmall => GoogleFonts.plusJakartaSans(
+  static final TextStyle headlineSmall = GoogleFonts.plusJakartaSans(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         height: 24 / 18,
       );
 
   // Body & Labels - Inter
-  static TextStyle get bodyLarge => GoogleFonts.inter(
+  static final TextStyle bodyLarge = GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         height: 24 / 16,
       );
 
-  static TextStyle get bodyMedium => GoogleFonts.inter(
+  static final TextStyle bodyMedium = GoogleFonts.inter(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         height: 20 / 14,
       );
 
-  static TextStyle get bodySmall => GoogleFonts.inter(
+  static final TextStyle bodySmall = GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         height: 16 / 12,
       );
 
-  static TextStyle get labelUi => GoogleFonts.inter(
+  static final TextStyle labelUi = GoogleFonts.inter(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         height: 14 / 11,
@@ -62,20 +62,20 @@ abstract final class AppTypography {
       );
 
   // Numeric & Sensor Telemetry - JetBrains Mono
-  static TextStyle get telemetryLarge => GoogleFonts.jetBrainsMono(
+  static final TextStyle telemetryLarge = GoogleFonts.jetBrainsMono(
         fontSize: 28,
         fontWeight: FontWeight.w600,
         height: 32 / 28,
         letterSpacing: -0.56,
       );
 
-  static TextStyle get telemetryMedium => GoogleFonts.jetBrainsMono(
+  static final TextStyle telemetryMedium = GoogleFonts.jetBrainsMono(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         height: 20 / 16,
       );
 
-  static TextStyle get telemetrySmall => GoogleFonts.jetBrainsMono(
+  static final TextStyle telemetrySmall = GoogleFonts.jetBrainsMono(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         height: 16 / 12,

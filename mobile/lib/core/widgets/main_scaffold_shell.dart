@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/plants/presentation/providers/plant_providers.dart';
+import '../l10n/app_localizations.dart';
+import '../routing/navigation_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 
@@ -19,6 +21,7 @@ class MainScaffoldShell extends ConsumerWidget {
     if (index == 0 || index == 1) {
       ref.read(plantListNotifierProvider.notifier).reload();
     }
+    ref.read(activeNavBranchProvider.notifier).setIndex(index);
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
@@ -27,9 +30,17 @@ class MainScaffoldShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = ref.watch(appLocalizationsProvider);
     final currentIndex = navigationShell.currentIndex;
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Defensively synchronize the active branch provider on route updates
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ref.read(activeNavBranchProvider) != currentIndex) {
+        ref.read(activeNavBranchProvider.notifier).setIndex(currentIndex);
+      }
+    });
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -64,7 +75,7 @@ class MainScaffoldShell extends ConsumerWidget {
                 _NavItem(
                   icon: Icons.home_outlined,
                   activeIcon: Icons.home,
-                  label: 'Home',
+                  label: l10n.navHome,
                   isSelected: currentIndex == 0,
                   onTap: () => _onTabTapped(ref, 0),
                 ),
@@ -72,7 +83,7 @@ class MainScaffoldShell extends ConsumerWidget {
                 _NavItem(
                   icon: Icons.yard_outlined,
                   activeIcon: Icons.yard,
-                  label: 'My Plants',
+                  label: l10n.navMyPlants,
                   isSelected: currentIndex == 1,
                   onTap: () => _onTabTapped(ref, 1),
                 ),
@@ -121,7 +132,7 @@ class MainScaffoldShell extends ConsumerWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Scan',
+                                l10n.navScan,
                                 style: AppTypography.labelUi.copyWith(
                                   color: currentIndex == 2
                                       ? colorScheme.primary
@@ -143,7 +154,7 @@ class MainScaffoldShell extends ConsumerWidget {
                 _NavItem(
                   icon: Icons.menu_book_outlined,
                   activeIcon: Icons.menu_book,
-                  label: 'Learn',
+                  label: l10n.navLearn,
                   isSelected: currentIndex == 3,
                   onTap: () => _onTabTapped(ref, 3),
                 ),
@@ -151,7 +162,7 @@ class MainScaffoldShell extends ConsumerWidget {
                 _NavItem(
                   icon: Icons.settings_outlined,
                   activeIcon: Icons.settings,
-                  label: 'Settings',
+                  label: l10n.navSettings,
                   isSelected: currentIndex == 4,
                   onTap: () => _onTabTapped(ref, 4),
                 ),

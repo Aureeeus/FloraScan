@@ -11,7 +11,6 @@ import '../theme/app_typography.dart';
 /// Displays:
 /// - Real-time BLE IoT Wand connectivity state.
 /// - Wand battery percentage.
-/// - Offline edge ONNX inference badge.
 class HardwareStatusHud extends ConsumerWidget {
   const HardwareStatusHud({super.key});
 
@@ -19,9 +18,6 @@ class HardwareStatusHud extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final telemetryAsync = ref.watch(liveTelemetryProvider);
     final agriColors = context.agriTheme;
-
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isCompact = screenWidth < 380;
 
     return telemetryAsync.maybeWhen(
       data: (telemetry) {
@@ -70,24 +66,6 @@ class HardwareStatusHud extends ConsumerWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (!isCompact) ...[
-                const SizedBox(width: 8),
-                Container(
-                  width: 1,
-                  height: 10,
-                  color: AppColors.outlineVariant,
-                ),
-                const SizedBox(width: 8),
-                // Edge AI indicator
-                Text(
-                  'ONNX Local (${telemetry.localInferenceLatencyMs}ms)',
-                  style: AppTypography.telemetrySmall.copyWith(
-                    color: AppColors.secondary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
             ],
           ),
         );

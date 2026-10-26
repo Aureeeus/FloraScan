@@ -128,10 +128,10 @@ abstract final class AppTheme {
       onSurfaceVariant: Color(0xFFB5BEB8),
       outline: AppColors.outline,
       outlineVariant: Color(0xFF424A45),
-      error: AppColors.error,
-      onError: AppColors.onError,
-      errorContainer: AppColors.errorContainer,
-      onErrorContainer: AppColors.onErrorContainer,
+      error: Color(0xFFFFB4AB),
+      onError: Color(0xFF690005),
+      errorContainer: Color(0xFF93000A),
+      onErrorContainer: Color(0xFFFFDAD6),
     );
 
     return ThemeData(
