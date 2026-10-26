@@ -91,15 +91,15 @@ class LocalTelemetryRepository implements TelemetryRepository {
       );
     }
 
-    // Query recent diagnostic scans from SQLite for real-time local ONNX inference latency
-    int onnxLatency = 38;
+    // Query recent diagnostic scans from SQLite for recent analysis latency
+    int scanLatency = 12;
     final recentScans = await db.query(
       'diagnostic_scans',
       orderBy: 'scanned_at DESC',
       limit: 1,
     );
     if (recentScans.isNotEmpty) {
-      onnxLatency = (recentScans.first['inference_latency_ms'] as num?)?.toInt() ?? 38;
+      scanLatency = (recentScans.first['inference_latency_ms'] as num?)?.toInt() ?? 12;
     }
 
     return FieldTelemetrySnapshot(
@@ -110,7 +110,7 @@ class LocalTelemetryRepository implements TelemetryRepository {
       solarRadiationPar: par,
       isWandConnected: true,
       wandBatteryPercent: 92,
-      localInferenceLatencyMs: onnxLatency,
+      localInferenceLatencyMs: scanLatency,
       lastUpdated: lastUpdated,
       activeAlerts: alerts,
     );

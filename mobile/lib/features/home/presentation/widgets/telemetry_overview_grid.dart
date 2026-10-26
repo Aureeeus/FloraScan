@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/agri_theme_extension.dart';
+import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../domain/entities/field_telemetry_model.dart';
 import 'telemetry_card.dart';
 
 /// 2x2 grid displaying live telemetry metrics for field operations.
-class TelemetryOverviewGrid extends StatelessWidget {
+class TelemetryOverviewGrid extends ConsumerWidget {
   const TelemetryOverviewGrid({
     required this.snapshot,
     super.key,
@@ -13,8 +15,9 @@ class TelemetryOverviewGrid extends StatelessWidget {
   final FieldTelemetrySnapshot snapshot;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final agriColors = context.agriTheme;
+    final isCelsius = ref.watch(isCelsiusMetricProvider);
 
     return GridView.count(
       crossAxisCount: 2,
@@ -34,8 +37,10 @@ class TelemetryOverviewGrid extends StatelessWidget {
         ),
         TelemetryCard(
           title: 'Soil Temp',
-          value: snapshot.soilTemperatureCelsius.toStringAsFixed(1),
-          unit: '°C',
+          value: isCelsius
+              ? snapshot.soilTemperatureCelsius.toStringAsFixed(1)
+              : ((snapshot.soilTemperatureCelsius * 1.8) + 32.0).toStringAsFixed(1),
+          unit: isCelsius ? '°C' : '°F',
           statusLabel: 'Normal',
           accentColor: agriColors.richOchreSoil,
           icon: Icons.thermostat_outlined,

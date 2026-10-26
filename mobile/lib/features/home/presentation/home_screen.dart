@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/ble/flora_wand_ble_service.dart';
 import '../../../core/routing/route_names.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -11,7 +12,7 @@ import '../../plants/domain/entities/plant_model.dart';
 import '../../plants/presentation/providers/plant_providers.dart';
 import '../../scan/domain/entities/diagnostic_scan_model.dart';
 import '../../scan/presentation/providers/diagnostic_providers.dart';
-import '../../../core/ble/flora_wand_ble_service.dart';
+import '../../settings/presentation/providers/settings_providers.dart';
 import '../domain/entities/field_telemetry_model.dart';
 import 'providers/telemetry_providers.dart';
 
@@ -19,12 +20,30 @@ import 'providers/telemetry_providers.dart';
 ///
 /// Adheres to Clean Architecture and SRP:
 /// - Strictly read-only presentation (data mutation resides exclusively in "My Plants").
-/// - Reactively consumes [liveTelemetryProvider], [plantListNotifierProvider], and [recentScansProvider].
-class HomeScreen extends ConsumerWidget {
+/// - Reactively consumes [liveTelemetryProvider], [plantListNotifierProvider], [recentScansProvider],
+///   and [floraWandNotifierProvider].
+/// - Offers interactive pot switching for live probe readings and clear, high-contrast triage summaries.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  String? _selectedPlotId;
+
+  PlantModel? _resolveActivePlant(List<PlantModel> plants) {
+    if (plants.isEmpty) return null;
+    if (_selectedPlotId != null) {
+      final match = plants.where((p) => p.id == _selectedPlotId).firstOrNull;
+      if (match != null) return match;
+    }
+    return plants.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final wandState = ref.watch(floraWandNotifierProvider);
     final telemetryAsync = ref.watch(liveTelemetryProvider);
     final plantsAsync = ref.watch(plantListNotifierProvider);
@@ -40,11 +59,19 @@ class HomeScreen extends ConsumerWidget {
             p.healthStatus == PlantHealthStatus.critical)
         .toList();
 
+    final activePlant = _resolveActivePlant(plants);
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: const FloraScanHeader(subtitle: 'Home'),
       body: SafeArea(
         child: RefreshIndicator(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Theme.of(context).colorScheme.primary
+              : AppColors.primary,
+          backgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? Theme.of(context).colorScheme.surfaceContainerHigh
+              : AppColors.surfaceContainerLowest,
           onRefresh: () async {
             await ref.read(plantListNotifierProvider.notifier).reload();
             if (context.mounted) {
@@ -56,41 +83,41 @@ class HomeScreen extends ConsumerWidget {
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Top Warm Greeting Card with Sproutly Mascot
-              _buildGreetingCard(context, telemetry, scans),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Warm Greeting Card with Sproutly Mascot & Garden Pulse
+                _buildGreetingCard(context, plants, attentionPlants),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // 2. Handheld Sensor Wand Status & Live Telemetry Card (Read-Only)
-              _buildTelemetryCard(context, ref, wandState, telemetry, plants),
+                // 2. Sensor Wand Status & Live Root-Zone Telemetry with Pot Selector
+                _buildTelemetryCard(context, wandState, telemetry, plants, activePlant),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              // 3. Plants That Need Attention (Read-Only Focal Alert Stream)
-              _buildAttentionSection(context, attentionPlants, hasNoPlants: plants.isEmpty),
+                // 3. Plants That Need Attention (Focal Alert Stream)
+                _buildAttentionSection(context, attentionPlants, hasNoPlants: plants.isEmpty),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              // 4. Latest Diagnosis Summary Card (Read-Only Scan History)
-              _buildLatestDiagnosisCard(context, scans),
+                // 4. Latest Diagnosis Summary Card (Recent Scan History)
+                _buildLatestDiagnosisCard(context, scans),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              // 5. Rotating Care Tip Featuring Sproutly
-              _buildCareTipCard(),
+                // 5. Rotating Care Tip Featuring Sproutly
+                _buildCareTipCard(context),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              // 6. Prominent Navigation CTA to Optical Scout
-              _buildInspectBanner(context),
+                // 6. Navigation CTA to Optical Scout
+                _buildInspectBanner(context),
 
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -98,41 +125,63 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildGreetingCard(
     BuildContext context,
-    FieldTelemetrySnapshot? telemetry,
-    List<DiagnosticScanResult> scans,
+    List<PlantModel> plants,
+    List<PlantModel> attentionPlants,
   ) {
-    final onnxLatency = scans.isNotEmpty
-        ? scans.first.inferenceLatencyMs
-        : (telemetry?.localInferenceLatencyMs ?? 38);
-    final onnxStatus = scans.isNotEmpty
-        ? 'ONNX ${onnxLatency}ms • Local Active'
-        : 'ONNX ${onnxLatency}ms • Local Ready';
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final String gardenPulseText;
+    final Color pulseColor;
+    if (plants.isEmpty) {
+      gardenPulseText = 'Ready for your first plant';
+      pulseColor = colorScheme.onSurfaceVariant;
+    } else if (attentionPlants.isEmpty) {
+      gardenPulseText = 'All ${plants.length} ${plants.length == 1 ? "crop is" : "crops are"} healthy';
+      pulseColor = isDark ? colorScheme.secondary : AppColors.secondary;
+    } else {
+      gardenPulseText = '${attentionPlants.length} ${attentionPlants.length == 1 ? "crop needs" : "crops need"} attention';
+      pulseColor = isDark ? const Color(0xFFFFB4AB) : AppColors.error;
+    }
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+          width: 1,
+        ),
+        boxShadow: isDark
+            ? const []
+            : const [
+                BoxShadow(
+                  color: Color(0x0A000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
       ),
       child: Row(
         children: [
           SproutlyMascot(
             size: 64,
-            badgeEmoji: '🌱',
-            badgeColor: AppColors.primaryContainer,
+            badgeEmoji: attentionPlants.isNotEmpty ? '🩺' : '🌱',
+            badgeColor: attentionPlants.isNotEmpty
+                ? (isDark ? colorScheme.tertiaryContainer : AppColors.tertiaryContainer)
+                : (isDark ? colorScheme.primaryContainer : AppColors.primaryContainer),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sproutly says: Hello! Your plants are thriving! 🌿'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(
+                    attentionPlants.isNotEmpty
+                        ? 'Sproutly says: Let\'s give some TLC to ${attentionPlants.first.name}! 🌿'
+                        : 'Sproutly says: Hello! Your garden is thriving beautifully! 🌿',
+                  ),
+                  duration: const Duration(seconds: 2),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -146,7 +195,7 @@ class HomeScreen extends ConsumerWidget {
                 Text(
                   'Good morning!',
                   style: AppTypography.headlineSmall.copyWith(
-                    color: AppColors.primary,
+                    color: isDark ? colorScheme.primary : AppColors.primary,
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
                   ),
@@ -155,7 +204,7 @@ class HomeScreen extends ConsumerWidget {
                 Text(
                   "Let's check your plants.",
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 13,
                   ),
                 ),
@@ -165,22 +214,20 @@ class HomeScreen extends ConsumerWidget {
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: AppColors.secondary,
+                        color: pulseColor,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        onnxStatus,
-                        style: AppTypography.telemetrySmall.copyWith(
-                          color: AppColors.secondary,
+                        gardenPulseText,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: pulseColor,
                           fontWeight: FontWeight.w700,
                           fontSize: 11,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -195,140 +242,235 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildTelemetryCard(
     BuildContext context,
-    WidgetRef ref,
     FloraWandState wandState,
     FieldTelemetrySnapshot? telemetry,
     List<PlantModel> plants,
+    PlantModel? activePlant,
   ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final isConnected = wandState.isConnected;
-    final batteryPercent = wandState.telemetry.batteryPercent;
-    final activePotLabel = plants.isNotEmpty
-        ? 'Active Plot: ${plants.first.name}'
+
+    final activePotLabel = activePlant != null
+        ? 'Active Plot: ${activePlant.name}'
         : 'No registered plots';
 
-    final hasData = isConnected || plants.isNotEmpty || (telemetry != null && (telemetry.soilMoisturePercent > 0 || telemetry.solarRadiationPar > 0));
-    final defaultMoisture = plants.isNotEmpty ? plants.first.soilMoisturePercent : (telemetry?.soilMoisturePercent ?? 0.0);
-    final defaultTemp = plants.isNotEmpty ? plants.first.soilTemperatureCelsius : (telemetry?.soilTemperatureCelsius ?? 0.0);
-    final effectiveMoisture = isConnected ? wandState.telemetry.soilMoisturePercent : (telemetry?.soilMoisturePercent ?? defaultMoisture);
-    final effectiveTemp = isConnected ? wandState.telemetry.temperatureCelsius : (telemetry?.soilTemperatureCelsius ?? defaultTemp);
-    final effectiveHumidity = isConnected ? wandState.telemetry.humidityPercent : (telemetry?.ambientHumidityPercent ?? 0.0);
-    final effectivePar = isConnected ? wandState.telemetry.lightLux : (telemetry?.solarRadiationPar ?? 0.0);
+    final hasData = isConnected && wandState.telemetry.hasReading;
 
-    final moistureVal = hasData ? effectiveMoisture.toStringAsFixed(0) : '--';
-    final moistureProgress = hasData ? (effectiveMoisture / 100.0).clamp(0.0, 1.0) : 0.0;
-
-    final tempVal = hasData ? effectiveTemp.toStringAsFixed(1) : '--';
-    final tempProgress = hasData ? (((effectiveTemp - 10) / 30.0)).clamp(0.0, 1.0) : 0.0;
-
-    final humidityVal = hasData ? effectiveHumidity.toStringAsFixed(0) : '--';
-    final humidityProgress = hasData ? (effectiveHumidity / 100.0).clamp(0.0, 1.0) : 0.0;
-
-    final parVal = hasData
-        ? (effectivePar >= 1000 ? '${(effectivePar / 1000).toStringAsFixed(1)}k' : effectivePar.toStringAsFixed(0))
+    // Soil Moisture
+    final String moistureCondition;
+    if (!hasData) {
+      moistureCondition = 'Offline';
+    } else if (wandState.telemetry.soilMoistureTag == 'Good') {
+      moistureCondition = 'Optimal';
+    } else {
+      moistureCondition = wandState.telemetry.soilMoistureTag;
+    }
+    final moistureVal = hasData
+        ? '${wandState.telemetry.soilMoisturePercent.toStringAsFixed(0)}% moisture'
         : '--';
-    final parProgress = hasData ? (effectivePar / 1200.0).clamp(0.0, 1.0) : 0.0;
+    final moistureProgress = hasData
+        ? (wandState.telemetry.soilMoisturePercent / 100.0).clamp(0.0, 1.0)
+        : 0.0;
+
+    final isCelsius = ref.watch(isCelsiusMetricProvider);
+    // Air Temperature
+    final String tempCondition;
+    if (!hasData) {
+      tempCondition = 'Offline';
+    } else if (wandState.telemetry.temperatureTag == 'Good') {
+      tempCondition = 'Comfortable';
+    } else {
+      tempCondition = wandState.telemetry.temperatureTag;
+    }
+    final tempVal = wandState.telemetry.formatTemperature(isCelsius: isCelsius);
+    final tempProgress = hasData
+        ? (((wandState.telemetry.temperatureCelsius - 10) / 30.0)).clamp(0.0, 1.0)
+        : 0.0;
+
+    // Humidity
+    final String humidityCondition;
+    if (!hasData) {
+      humidityCondition = 'Offline';
+    } else if (wandState.telemetry.humidityTag == 'Good') {
+      humidityCondition = 'Ideal Air';
+    } else {
+      humidityCondition = wandState.telemetry.humidityTag;
+    }
+    final humidityVal = hasData
+        ? '${wandState.telemetry.humidityPercent.toStringAsFixed(0)}% RH'
+        : '--';
+    final humidityProgress = hasData
+        ? (wandState.telemetry.humidityPercent / 100.0).clamp(0.0, 1.0)
+        : 0.0;
+
+    // Light
+    final String lightCondition;
+    if (!hasData) {
+      lightCondition = 'Offline';
+    } else if (wandState.telemetry.lightTag == 'Bright') {
+      lightCondition = 'Bright Sun';
+    } else if (wandState.telemetry.lightTag == 'Normal') {
+      lightCondition = 'Moderate';
+    } else {
+      lightCondition = wandState.telemetry.lightTag;
+    }
+    final parVal = hasData
+        ? (wandState.telemetry.lightLux >= 1000
+            ? '${(wandState.telemetry.lightLux / 1000).toStringAsFixed(1)}k Lux'
+            : '${wandState.telemetry.lightLux.toStringAsFixed(0)} Lux')
+        : '--';
+    final parProgress = hasData
+        ? (wandState.telemetry.lightLux / 50000.0).clamp(0.0, 1.0)
+        : 0.0;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+          width: 1,
+        ),
+        boxShadow: isDark
+            ? const []
+            : const [
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header: Wand status and active pot name
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.secondaryContainer,
-                      ),
-                      child: const Icon(
-                        Icons.sensors,
-                        color: AppColors.onSecondaryContainer,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isConnected ? 'FloraWand Connected' : wandState.statusLabel,
-                            style: AppTypography.headlineSmall.copyWith(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            activePotLabel,
-                            style: AppTypography.telemetrySmall.copyWith(
-                              fontSize: 11,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? colorScheme.secondaryContainer : AppColors.secondaryContainer,
+                ),
+                child: Icon(
+                  Icons.sensors,
+                  color: isDark ? colorScheme.onSecondaryContainer : AppColors.onSecondaryContainer,
+                  size: 20,
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.battery_charging_full,
-                      size: 14,
-                      color: AppColors.secondary,
-                    ),
-                    const SizedBox(width: 3),
                     Text(
-                      '$batteryPercent%',
-                      style: AppTypography.telemetrySmall.copyWith(
+                      wandState.statusLabel,
+                      style: AppTypography.headlineSmall.copyWith(
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        color: AppColors.onSurface,
+                        color: colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.bluetooth,
-                      size: 13,
-                      color: AppColors.secondary,
+                    Text(
+                      activePotLabel,
+                      style: AppTypography.telemetrySmall.copyWith(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
                     ),
                   ],
                 ),
               ),
             ],
           ),
+
+          // Interactive Plot Switcher Pills (If user has multiple plants)
+          if (plants.length > 1) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 32,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: plants.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final plant = plants[index];
+                  final isSelected = plant.id == activePlant?.id;
+                  final hasWarning = plant.healthStatus != PlantHealthStatus.healthy;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedPlotId = plant.id;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? (isDark ? colorScheme.primary : AppColors.primary)
+                            : (isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerLow),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? (isDark ? colorScheme.primary : AppColors.primary)
+                              : (isDark
+                                  ? colorScheme.outlineVariant.withValues(alpha: 0.4)
+                                  : AppColors.outlineVariant.withValues(alpha: 0.5)),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            plant.cropFamily.toLowerCase().contains('chili')
+                                ? Icons.local_fire_department
+                                : Icons.eco,
+                            size: 13,
+                            color: isSelected
+                                ? (isDark ? colorScheme.onPrimary : AppColors.onPrimary)
+                                : (isDark ? colorScheme.secondary : AppColors.secondary),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            plant.name,
+                            style: AppTypography.labelUi.copyWith(
+                              color: isSelected
+                                  ? (isDark ? colorScheme.onPrimary : AppColors.onPrimary)
+                                  : colorScheme.onSurface,
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                          if (hasWarning) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDark ? const Color(0xFFFFB4AB) : AppColors.error,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
 
           const SizedBox(height: 14),
 
@@ -339,105 +481,120 @@ class HomeScreen extends ConsumerWidget {
             mainAxisSpacing: 10,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 1.5,
+            childAspectRatio: 1.38,
             children: [
               _TelemetryMiniCard(
                 icon: Icons.water_drop,
-                iconColor: AppColors.secondary,
+                iconColor: isDark ? colorScheme.secondary : AppColors.secondary,
                 label: 'Soil Moist.',
-                statusTag: isConnected
-                    ? wandState.telemetry.soilMoistureTag
-                    : (!hasData ? 'Standby' : (effectiveMoisture < 25 ? 'Low' : (effectiveMoisture > 75 ? 'Wet' : 'Good'))),
-                statusBg: isConnected
-                    ? (wandState.telemetry.isMoistureWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
-                    : (hasData && (effectiveMoisture < 25 || effectiveMoisture > 75) ? AppColors.errorContainer : AppColors.secondaryFixed),
-                statusTextColor: isConnected
-                    ? (wandState.telemetry.isMoistureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
-                    : (hasData && (effectiveMoisture < 25 || effectiveMoisture > 75) ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
-                numericValue: moistureVal,
-                unit: '%',
+                conditionText: moistureCondition,
+                measurementText: moistureVal,
+                isWarning: hasData && wandState.telemetry.isMoistureWarning,
                 progressPercent: moistureProgress,
-                progressColor: AppColors.secondary,
+                progressColor: isDark ? colorScheme.secondary : AppColors.secondary,
               ),
               _TelemetryMiniCard(
                 icon: Icons.thermostat,
-                iconColor: AppColors.tertiaryContainer,
+                iconColor: isDark ? colorScheme.tertiary : AppColors.tertiaryContainer,
                 label: 'Air Temp',
-                statusTag: isConnected
-                    ? wandState.telemetry.temperatureTag
-                    : (!hasData ? 'Standby' : (effectiveTemp < 18 ? 'Cool' : (effectiveTemp > 32 ? 'Warm' : 'Good'))),
-                statusBg: isConnected
-                    ? (wandState.telemetry.isTemperatureWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
-                    : (hasData && (effectiveTemp < 18 || effectiveTemp > 32) ? AppColors.errorContainer : AppColors.secondaryFixed),
-                statusTextColor: isConnected
-                    ? (wandState.telemetry.isTemperatureWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
-                    : (hasData && (effectiveTemp < 18 || effectiveTemp > 32) ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
-                numericValue: tempVal,
-                unit: '°C',
+                conditionText: tempCondition,
+                measurementText: tempVal,
+                isWarning: hasData && wandState.telemetry.isTemperatureWarning,
                 progressPercent: tempProgress,
-                progressColor: AppColors.secondaryFixedDim,
+                progressColor: isDark ? colorScheme.secondary : AppColors.secondaryFixedDim,
               ),
               _TelemetryMiniCard(
                 icon: Icons.cloud,
-                iconColor: AppColors.secondary,
+                iconColor: isDark ? colorScheme.secondary : AppColors.secondary,
                 label: 'Humidity',
-                statusTag: isConnected
-                    ? wandState.telemetry.humidityTag
-                    : (!hasData ? 'Standby' : (effectiveHumidity < 40 ? 'Dry' : (effectiveHumidity > 75 ? 'Humid' : 'Good'))),
-                statusBg: isConnected
-                    ? (wandState.telemetry.isHumidityWarning ? AppColors.errorContainer : AppColors.secondaryFixed)
-                    : (hasData && (effectiveHumidity < 40 || effectiveHumidity > 75) ? AppColors.errorContainer : AppColors.secondaryFixed),
-                statusTextColor: isConnected
-                    ? (wandState.telemetry.isHumidityWarning ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant)
-                    : (hasData && (effectiveHumidity < 40 || effectiveHumidity > 75) ? AppColors.onErrorContainer : AppColors.onSecondaryFixedVariant),
-                numericValue: humidityVal,
-                unit: '%',
+                conditionText: humidityCondition,
+                measurementText: humidityVal,
+                isWarning: hasData && wandState.telemetry.isHumidityWarning,
                 progressPercent: humidityProgress,
-                progressColor: AppColors.secondary,
+                progressColor: isDark ? colorScheme.secondary : AppColors.secondary,
               ),
               _TelemetryMiniCard(
                 icon: Icons.wb_sunny,
-                iconColor: AppColors.tertiaryFixedDim,
+                iconColor: isDark ? colorScheme.tertiary : AppColors.tertiaryFixedDim,
                 label: 'Light Lux',
-                statusTag: isConnected
-                    ? wandState.telemetry.lightTag
-                    : (!hasData ? 'Standby' : (effectivePar > 600 ? 'Bright' : 'Normal')),
-                statusBg: isConnected && wandState.telemetry.isLightWarning ? AppColors.errorContainer : AppColors.tertiaryFixed,
-                statusTextColor: isConnected && wandState.telemetry.isLightWarning ? AppColors.onErrorContainer : AppColors.onTertiaryFixed,
-                numericValue: parVal,
-                unit: hasData ? 'Lux' : '',
+                conditionText: lightCondition,
+                measurementText: parVal,
+                isWarning: hasData && wandState.telemetry.isLightWarning,
                 progressPercent: parProgress,
-                progressColor: AppColors.tertiaryFixedDim,
+                progressColor: isDark ? colorScheme.tertiary : AppColors.tertiaryFixedDim,
               ),
             ],
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          // Read another pot action button (Read-only prompt)
-          OutlinedButton.icon(
-            onPressed: () async {
-              await ref.read(floraWandNotifierProvider.notifier).triggerSample();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Sensor probe active. Viewing live root-zone telemetry.'),
-                    duration: Duration(seconds: 2),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.sync, size: 18),
-            label: const Text('Read Another Pot'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(44),
-              backgroundColor: AppColors.surfaceContainerHigh,
-              foregroundColor: AppColors.onSurface,
-              side: BorderSide.none,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          // Wand Connection & Telemetry Action CTA
+          if (!isConnected)
+            FilledButton.icon(
+              onPressed: wandState.isScanning
+                  ? null
+                  : () async {
+                      await ref.read(floraWandNotifierProvider.notifier).startScan();
+                    },
+              icon: wandState.isScanning
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: isDark ? colorScheme.onPrimary : AppColors.onPrimary,
+                      ),
+                    )
+                  : const Icon(Icons.bluetooth_searching, size: 18),
+              label: Text(
+                wandState.isScanning ? 'Searching for FloraWand...' : 'Connect FloraWand',
+              ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                backgroundColor: isDark ? colorScheme.secondary : AppColors.secondaryFixed,
+                foregroundColor: isDark ? const Color(0xFF002114) : AppColors.onSecondaryFixed,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                textStyle: AppTypography.labelUi.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: () async {
+                if (plants.length > 1) {
+                  final currentIndex = plants.indexWhere((p) => p.id == activePlant?.id);
+                  final nextIndex = (currentIndex + 1) % plants.length;
+                  setState(() {
+                    _selectedPlotId = plants[nextIndex].id;
+                  });
+                }
+                await ref.read(floraWandNotifierProvider.notifier).triggerSample();
+                if (context.mounted) {
+                  final potName = activePlant?.name ?? 'selected plot';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Probe active. Viewing live root-zone telemetry for $potName.'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.sync, size: 18),
+              label: const Text('Read Another Pot'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                backgroundColor: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
+                foregroundColor: colorScheme.onSurface,
+                side: BorderSide(
+                  color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.3) : Colors.transparent,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -448,6 +605,10 @@ class HomeScreen extends ConsumerWidget {
     List<PlantModel> attentionPlants, {
     required bool hasNoPlants,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -458,19 +619,17 @@ class HomeScreen extends ConsumerWidget {
               child: Text(
                 'Plants That Need Attention',
                 style: AppTypography.headlineSmall.copyWith(
-                  color: AppColors.primary,
+                  color: isDark ? colorScheme.primary : AppColors.primary,
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 8),
             Text(
               '${attentionPlants.length} Tracked',
               style: AppTypography.telemetrySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 12,
               ),
             ),
@@ -483,12 +642,15 @@ class HomeScreen extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLowest,
+              color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.yard_outlined, color: AppColors.secondary, size: 28),
+                Icon(Icons.yard_outlined, color: isDark ? colorScheme.secondary : AppColors.secondary, size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -499,14 +661,14 @@ class HomeScreen extends ConsumerWidget {
                         style: AppTypography.headlineSmall.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.onSurface,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Your garden is waiting. Head over to My Plants to register your first plant!',
                         style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),
@@ -521,12 +683,15 @@ class HomeScreen extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLowest,
+              color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle_outline, color: AppColors.secondary, size: 28),
+                Icon(Icons.check_circle_outline, color: isDark ? colorScheme.secondary : AppColors.secondary, size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -537,13 +702,13 @@ class HomeScreen extends ConsumerWidget {
                         style: AppTypography.headlineSmall.copyWith(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.onSurface,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                       Text(
                         'All registered plots are operating within nominal agronomic thresholds.',
                         style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                          color: colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),
@@ -563,20 +728,39 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildPlantAttentionCard(BuildContext context, PlantModel plant) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final isCritical = plant.healthStatus == PlantHealthStatus.critical;
-    final tagLabel = isCritical ? 'Needs Care' : 'Needs Care';
+    const tagLabel = 'Needs Care';
     final diagnosis = plant.primaryDiagnosis ??
         (plant.notes.isNotEmpty ? plant.notes : 'Canopy inspection recommended');
+
+    final pillBg = isCritical
+        ? (isDark ? colorScheme.errorContainer : AppColors.errorContainer)
+        : (isDark ? colorScheme.tertiaryContainer : AppColors.tertiaryFixed);
+    final pillFg = isCritical
+        ? (isDark ? colorScheme.onErrorContainer : AppColors.onErrorContainer)
+        : (isDark ? colorScheme.onTertiaryContainer : AppColors.onTertiaryFixed);
+    final dotColor = isCritical
+        ? (isDark ? const Color(0xFFFFB4AB) : AppColors.error)
+        : (isDark ? colorScheme.tertiary : AppColors.tertiary);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: const [
-          BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2)),
-        ],
+        border: Border.all(
+          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+        ),
+        boxShadow: isDark
+            ? const []
+            : const [
+                BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2)),
+              ],
       ),
       child: Column(
         children: [
@@ -584,49 +768,27 @@ class HomeScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(10),
+                    Text(
+                      plant.name,
+                      style: AppTypography.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
+                        fontSize: 16,
+                        letterSpacing: -0.2,
                       ),
-                      child: Icon(
-                        plant.cropFamily.toLowerCase().contains('chili')
-                            ? Icons.local_fire_department
-                            : Icons.eco,
-                        color: AppColors.primary,
-                        size: 22,
-                      ),
+                      softWrap: true,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            plant.name,
-                            style: AppTypography.bodyLarge.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
-                              fontSize: 15,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            '${plant.variety} • Soil ${plant.soilMoisturePercent.toStringAsFixed(0)}%',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '${plant.variety} • Soil ${plant.soilMoisturePercent.toStringAsFixed(0)}%',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 12,
                       ),
+                      softWrap: true,
                     ),
                   ],
                 ),
@@ -635,8 +797,11 @@ class HomeScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isCritical ? AppColors.errorContainer : AppColors.tertiaryFixed,
+                  color: pillBg,
                   borderRadius: BorderRadius.circular(9999),
+                  border: Border.all(
+                    color: isDark ? pillFg.withValues(alpha: 0.3) : Colors.transparent,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -646,16 +811,14 @@ class HomeScreen extends ConsumerWidget {
                       height: 5,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isCritical ? AppColors.error : AppColors.tertiary,
+                        color: dotColor,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Text(
                       tagLabel,
                       style: AppTypography.labelUi.copyWith(
-                        color: isCritical
-                            ? AppColors.onErrorContainer
-                            : AppColors.onTertiaryFixed,
+                        color: pillFg,
                         fontWeight: FontWeight.w700,
                         fontSize: 10,
                       ),
@@ -669,22 +832,27 @@ class HomeScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
+              color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.15) : Colors.transparent,
+              ),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.warning_amber_rounded,
                   size: 16,
-                  color: isCritical ? AppColors.error : AppColors.tertiary,
+                  color: isCritical
+                      ? (isDark ? const Color(0xFFFFB4AB) : AppColors.error)
+                      : (isDark ? colorScheme.tertiary : AppColors.tertiary),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     diagnosis,
                     style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.onSurface,
+                      color: colorScheme.onSurface,
                       fontSize: 12,
                     ),
                   ),
@@ -699,8 +867,8 @@ class HomeScreen extends ConsumerWidget {
             label: const Text('Check Now'),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
-              backgroundColor: AppColors.primaryContainer,
-              foregroundColor: AppColors.onPrimary,
+              backgroundColor: isDark ? colorScheme.primary : AppColors.primaryContainer,
+              foregroundColor: isDark ? colorScheme.onPrimary : AppColors.onPrimary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
@@ -713,22 +881,31 @@ class HomeScreen extends ConsumerWidget {
     BuildContext context,
     List<DiagnosticScanResult> scans,
   ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     if (scans.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
+          color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2)),
-          ],
+          border: Border.all(
+            color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+          ),
+          boxShadow: isDark
+              ? const []
+              : const [
+                  BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2)),
+                ],
         ),
         child: Column(
           children: [
             Row(
               children: [
-                const Icon(Icons.biotech, color: AppColors.secondary, size: 22),
+                Icon(Icons.biotech, color: isDark ? colorScheme.secondary : AppColors.secondary, size: 22),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -736,23 +913,21 @@ class HomeScreen extends ConsumerWidget {
                     style: AppTypography.headlineSmall.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
-                      color: AppColors.onSurface,
+                      color: colorScheme.onSurface,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
-            const Icon(Icons.qr_code_scanner, size: 36, color: AppColors.secondary),
+            Icon(Icons.qr_code_scanner, size: 36, color: isDark ? colorScheme.secondary : AppColors.secondary),
             const SizedBox(height: 8),
             Text(
               'No Diagnostic Scans Yet',
               style: AppTypography.headlineSmall.copyWith(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
-                color: AppColors.onSurface,
+                color: colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 4),
@@ -760,7 +935,7 @@ class HomeScreen extends ConsumerWidget {
               'Capture or upload a leaf photo to get real-time offline AI diagnosis.',
               textAlign: TextAlign.center,
               style: AppTypography.bodySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 12,
               ),
             ),
@@ -771,9 +946,11 @@ class HomeScreen extends ConsumerWidget {
               label: const Text('Start First Scan'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(40),
-                backgroundColor: AppColors.surfaceContainerHigh,
-                foregroundColor: AppColors.primary,
-                side: BorderSide.none,
+                backgroundColor: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
+                foregroundColor: isDark ? colorScheme.primary : AppColors.primary,
+                side: BorderSide(
+                  color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.3) : Colors.transparent,
+                ),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -783,7 +960,6 @@ class HomeScreen extends ConsumerWidget {
     }
 
     final latest = scans.first;
-
     final condition = latest.detectedCondition;
     final crop = latest.targetCrop;
     final pathogen = latest.scientificPathogen;
@@ -799,11 +975,16 @@ class HomeScreen extends ConsumerWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2)),
-        ],
+        border: Border.all(
+          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+        ),
+        boxShadow: isDark
+            ? const []
+            : const [
+                BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2)),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -814,7 +995,11 @@ class HomeScreen extends ConsumerWidget {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.biotech, color: AppColors.error, size: 22),
+                    Icon(
+                      Icons.biotech,
+                      color: isDark ? const Color(0xFFFFB4AB) : AppColors.error,
+                      size: 22,
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -822,10 +1007,8 @@ class HomeScreen extends ConsumerWidget {
                         style: AppTypography.headlineSmall.copyWith(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
-                          color: AppColors.onSurface,
+                          color: colorScheme.onSurface,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -839,54 +1022,36 @@ class HomeScreen extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.errorContainer,
+                        color: isDark ? colorScheme.errorContainer : AppColors.errorContainer,
                         borderRadius: BorderRadius.circular(9999),
+                        border: Border.all(
+                          color: isDark ? colorScheme.onErrorContainer.withValues(alpha: 0.3) : Colors.transparent,
+                        ),
                       ),
                       child: Text(
                         'DISEASE',
                         style: AppTypography.labelUi.copyWith(
-                          color: AppColors.onErrorContainer,
+                          color: isDark ? colorScheme.onErrorContainer : AppColors.onErrorContainer,
                           fontWeight: FontWeight.w800,
                           fontSize: 10,
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Text(
-                          '$confidence Conf.',
-                          style: AppTypography.telemetrySmall.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(9999),
+                        border: Border.all(
+                          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.3) : Colors.transparent,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.secondaryContainer,
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Text(
-                          '${latest.inferenceLatencyMs}ms ONNX',
-                          style: AppTypography.telemetrySmall.copyWith(
-                            color: AppColors.onSecondaryContainer,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      child: Text(
+                        '$confidence Conf.',
+                        style: AppTypography.telemetrySmall.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 10,
                         ),
                       ),
                     ),
@@ -899,46 +1064,36 @@ class HomeScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
+              color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.15) : Colors.transparent,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Crop: $crop ($pathogen)',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        condition,
-                        style: AppTypography.telemetrySmall.copyWith(
-                          color: AppColors.error,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Crop: $crop ($pathogen)',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  condition,
+                  style: AppTypography.telemetrySmall.copyWith(
+                    color: isDark ? const Color(0xFFFFB4AB) : AppColors.error,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   symptoms,
                   style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.onSurface,
+                    color: colorScheme.onSurface,
                     fontSize: 13,
                   ),
                 ),
@@ -949,12 +1104,19 @@ class HomeScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.tertiaryFixed,
+              color: isDark ? colorScheme.tertiaryContainer : AppColors.tertiaryFixed,
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? colorScheme.tertiary.withValues(alpha: 0.3) : Colors.transparent,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.content_cut, color: AppColors.tertiary, size: 18),
+                Icon(
+                  Icons.content_cut,
+                  color: isDark ? colorScheme.tertiary : AppColors.tertiary,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -965,14 +1127,15 @@ class HomeScreen extends ConsumerWidget {
                         style: AppTypography.labelUi.copyWith(
                           fontSize: 9,
                           letterSpacing: 0.8,
-                          color: AppColors.onTertiaryFixed.withValues(alpha: 0.8),
+                          color: (isDark ? colorScheme.onTertiaryContainer : AppColors.onTertiaryFixed)
+                              .withValues(alpha: 0.8),
                         ),
                       ),
                       Text(
                         action,
                         style: AppTypography.bodySmall.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: AppColors.onTertiaryFixed,
+                          color: isDark ? colorScheme.onTertiaryContainer : AppColors.onTertiaryFixed,
                           fontSize: 12,
                         ),
                       ),
@@ -989,9 +1152,11 @@ class HomeScreen extends ConsumerWidget {
             label: const Text('View Full Advice & Recipe'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
-              backgroundColor: AppColors.surfaceContainerHigh,
-              foregroundColor: AppColors.primary,
-              side: BorderSide.none,
+              backgroundColor: isDark ? colorScheme.surfaceContainerHigh : AppColors.surfaceContainerHigh,
+              foregroundColor: isDark ? colorScheme.primary : AppColors.primary,
+              side: BorderSide(
+                color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.3) : Colors.transparent,
+              ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
@@ -1000,23 +1165,32 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCareTipCard() {
+  Widget _buildCareTipCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
+        color: isDark ? colorScheme.surfaceContainerLow : AppColors.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
-        ],
+        border: Border.all(
+          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.25) : Colors.transparent,
+        ),
+        boxShadow: isDark
+            ? const []
+            : const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+              ],
       ),
       child: Row(
         children: [
-          const SproutlyMascot(
+          SproutlyMascot(
             size: 48,
             badgeEmoji: '💡',
-            badgeColor: AppColors.tertiaryContainer,
+            badgeColor: isDark ? colorScheme.tertiaryContainer : AppColors.tertiaryContainer,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1026,7 +1200,7 @@ class HomeScreen extends ConsumerWidget {
                 Text(
                   'QUICK GARDENING TIP',
                   style: AppTypography.labelUi.copyWith(
-                    color: AppColors.secondary,
+                    color: isDark ? colorScheme.secondary : AppColors.secondary,
                     fontWeight: FontWeight.w800,
                     fontSize: 10,
                     letterSpacing: 0.8,
@@ -1036,7 +1210,7 @@ class HomeScreen extends ConsumerWidget {
                 Text(
                   'Water in the early morning at the soil base, not over the leaves, to prevent fungal mold!',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.onSurface,
+                    color: colorScheme.onSurface,
                     fontSize: 12,
                   ),
                 ),
@@ -1049,6 +1223,10 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Widget _buildInspectBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return InkWell(
       onTap: () => context.go(AppRoutes.scan),
       borderRadius: BorderRadius.circular(16),
@@ -1056,24 +1234,30 @@ class HomeScreen extends ConsumerWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.primaryContainer,
+          color: isDark ? colorScheme.primaryContainer : AppColors.primaryContainer,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(color: Color(0x22012D1D), blurRadius: 10, offset: Offset(0, 3)),
-          ],
+          border: Border.all(
+            color: isDark ? colorScheme.primary.withValues(alpha: 0.3) : Colors.transparent,
+            width: 1,
+          ),
+          boxShadow: isDark
+              ? const []
+              : const [
+                  BoxShadow(color: Color(0x22012D1D), blurRadius: 10, offset: Offset(0, 3)),
+                ],
         ),
         child: Row(
           children: [
             Container(
               width: 40,
               height: 40,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.secondaryFixed,
+                color: isDark ? colorScheme.primary.withValues(alpha: 0.2) : AppColors.secondaryFixed,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.center_focus_strong,
-                color: AppColors.onSecondaryFixedVariant,
+                color: isDark ? colorScheme.primary : AppColors.onSecondaryFixedVariant,
                 size: 22,
               ),
             ),
@@ -1085,7 +1269,7 @@ class HomeScreen extends ConsumerWidget {
                   Text(
                     'Ready to Inspect?',
                     style: AppTypography.headlineSmall.copyWith(
-                      color: AppColors.onPrimary,
+                      color: isDark ? colorScheme.onSurface : AppColors.onPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
@@ -1093,16 +1277,16 @@ class HomeScreen extends ConsumerWidget {
                   Text(
                     'Tap to test a leaf with your camera & wand.',
                     style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.onPrimaryContainer,
+                      color: isDark ? colorScheme.onPrimaryContainer : AppColors.onPrimaryContainer,
                       fontSize: 12,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.arrow_forward_ios,
-              color: AppColors.onPrimaryContainer,
+              color: isDark ? colorScheme.primary : AppColors.onPrimaryContainer,
               size: 16,
             ),
           ],
@@ -1117,110 +1301,103 @@ class _TelemetryMiniCard extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.label,
-    required this.statusTag,
-    required this.statusBg,
-    required this.statusTextColor,
-    required this.numericValue,
-    required this.unit,
+    required this.conditionText,
+    required this.measurementText,
     required this.progressPercent,
     required this.progressColor,
+    this.isWarning = false,
   });
 
   final IconData icon;
   final Color iconColor;
   final String label;
-  final String statusTag;
-  final Color statusBg;
-  final Color statusTextColor;
-  final String numericValue;
-  final String unit;
+  final String conditionText;
+  final String measurementText;
   final double progressPercent;
   final Color progressColor;
+  final bool isWarning;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: isDark ? colorScheme.surfaceContainer : AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? colorScheme.outlineVariant.withValues(alpha: 0.2) : Colors.transparent,
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // 1. Header: Icon + Sensor Label (Clean, zero pill clutter)
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Icon(icon, size: 14, color: iconColor),
+              const SizedBox(width: 5),
               Expanded(
-                child: Row(
-                  children: [
-                    Icon(icon, size: 14, color: iconColor),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: statusBg,
-                    borderRadius: BorderRadius.circular(9999),
+                child: Text(
+                  label,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
-                  child: Text(
-                    statusTag,
-                    style: AppTypography.labelUi.copyWith(
-                      color: statusTextColor,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+
+          // 2. Middle Block: Hero Condition Text + Tabular Quantitative Measurement
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                numericValue,
-                style: AppTypography.telemetryLarge.copyWith(
-                  fontSize: 20,
+                conditionText,
+                style: AppTypography.headlineSmall.copyWith(
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.onSurface,
+                  color: isWarning
+                      ? (isDark ? const Color(0xFFFFB4AB) : AppColors.error)
+                      : colorScheme.onSurface,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(width: 2),
+              const SizedBox(height: 1),
               Text(
-                unit,
+                measurementText,
                 style: AppTypography.telemetrySmall.copyWith(
                   fontSize: 11,
-                  color: AppColors.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurfaceVariant,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
+
+          // 3. Bottom: Concentric 4px Progress Indicator
           ClipRRect(
             borderRadius: BorderRadius.circular(9999),
             child: LinearProgressIndicator(
               value: progressPercent,
-              minHeight: 5,
-              backgroundColor: AppColors.surfaceContainerHighest,
+              minHeight: 4,
+              backgroundColor: isDark
+                  ? colorScheme.surfaceContainerHighest
+                  : AppColors.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(progressColor),
             ),
           ),

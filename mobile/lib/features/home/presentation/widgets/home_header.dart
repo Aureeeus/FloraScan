@@ -42,7 +42,7 @@ class HomeHeader extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Active Scouting: Solanaceae Plots #1–#4',
+          'Active Scouting: Solanaceae Plots 1–4',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant,
           ),
